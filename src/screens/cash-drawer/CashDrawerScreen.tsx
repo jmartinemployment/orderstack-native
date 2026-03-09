@@ -13,8 +13,9 @@ import { useAppStore } from '@store/index';
 import DenominationCounter from './components/DenominationCounter';
 import CashEventLog from './components/CashEventLog';
 import CashKpiCards from './components/CashKpiCards';
-import type { CashDenomination, CashEventType } from '@models/index';
+import type { CashDenomination, CashDrawerSession, CashEventType } from '@models/index';
 import type { CashDrawerScreenProps } from '@navigation/types';
+import type { CashDrawerView } from '@store/cashDrawerSlice';
 
 const EMPTY_DENOMINATION: CashDenomination = {
   hundreds: 0,
@@ -48,6 +49,9 @@ const KEYPAD_ROWS = [
   ['.', '0', 'backspace'],
 ];
 
+/** Stable keys for KEYPAD_ROWS to avoid array-index keys in JSX */
+const KEYPAD_ROW_KEYS = ['row-1-3', 'row-4-6', 'row-7-9', 'row-dot-0-back'];
+
 function handleKeypadPress(current: string, key: string): string {
   if (key === 'clear') { return ''; }
   if (key === 'backspace') { return current.slice(0, -1); }
@@ -61,6 +65,34 @@ function handleKeypadPress(current: string, key: string): string {
   // Prevent leading zeros (except "0.")
   if (current === '0' && key !== '.') { return key; }
   return current + key;
+}
+
+function getVarianceColor(
+  value: number,
+  colors: { success: string; info: string; error: string },
+): string {
+  if (value === 0) { return colors.success; }
+  if (value > 0) { return colors.info; }
+  return colors.error;
+}
+
+function getVarianceLabel(value: number): string {
+  if (value === 0) { return 'Even'; }
+  if (value > 0) { return 'Over'; }
+  return 'Short';
+}
+
+function getDiffLabel(diff: number): string {
+  if (diff === 0) { return 'Even'; }
+  const formatted = `$${Math.abs(diff).toFixed(2)}`;
+  if (diff > 0) { return `Over ${formatted}`; }
+  return `Short ${formatted}`;
+}
+
+function getKeyAccessibilityLabel(key: string): string {
+  if (key === 'backspace') { return 'Delete last digit'; }
+  if (key === '.') { return 'Decimal point'; }
+  return `Number ${key}`;
 }
 
 export default function CashDrawerScreen(_props: Readonly<CashDrawerScreenProps>): React.JSX.Element {
@@ -129,309 +161,26 @@ export default function CashDrawerScreen(_props: Readonly<CashDrawerScreenProps>
   }, [clearCashDrawerSession]);
 
   // Determine current view
-  const currentView = !session ? 'open' : view;
+  const currentView = session ? view : 'open';
 
   // Closed drawer summary
   if (session && !session.isOpen && currentView === 'status') {
-    const variance = session.variance ?? 0;
-    const varianceColor = variance === 0 ? colors.success : variance > 0 ? colors.info : colors.error;
-    const varianceLabel = variance === 0 ? 'Even' : variance > 0 ? 'Over' : 'Short';
-
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Cash Drawer</Text>
-          <View style={[styles.statusBadge, { backgroundColor: colors.errorLight }]}>
-            <Text style={[styles.statusBadgeText, { color: colors.error }]}>Closed</Text>
-          </View>
-        </View>
-
-        <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
-          <Text style={styles.sectionTitle}>Reconciliation Summary</Text>
-
-          <View style={styles.summaryCard}>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Opening Float</Text>
-              <Text style={styles.summaryValue}>${session.openingFloat.toFixed(2)}</Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Expected Balance</Text>
-              <Text style={styles.summaryValue}>${(session.expectedBalance ?? 0).toFixed(2)}</Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Actual Count</Text>
-              <Text style={styles.summaryValue}>${(session.closingTotal ?? 0).toFixed(2)}</Text>
-            </View>
-            <View style={styles.divider} />
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabelBold}>Variance</Text>
-              <Text style={[styles.summaryValueBold, { color: varianceColor }]}>
-                {varianceLabel}: ${Math.abs(variance).toFixed(2)}
-              </Text>
-            </View>
-          </View>
-
-          <Text style={styles.sectionTitle}>Event History ({session.events.length})</Text>
-          <View style={styles.eventLogContainer}>
-            <CashEventLog events={session.events} />
-          </View>
-        </ScrollView>
-
-        <View style={styles.footer}>
-          <TouchableOpacity
-            style={styles.primaryBtn}
-            onPress={handleStartNewSession}
-            accessibilityRole="button"
-            accessibilityLabel="Start new session"
-          >
-            <Text style={styles.primaryBtnText}>Start New Session</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
+    return renderClosedSummary(session, styles, colors, handleStartNewSession);
   }
 
   // Open drawer view
   if (currentView === 'open') {
-    const floatDisplay = floatInput.length > 0 ? floatInput : '0';
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Open Cash Drawer</Text>
-        </View>
-
-        <View style={styles.keypadContainer}>
-          <Text style={styles.keypadLabel}>Opening Float</Text>
-
-          {/* Amount display */}
-          <View style={styles.display}>
-            <Text style={styles.dollarSign}>$</Text>
-            <Text style={styles.amount} numberOfLines={1} adjustsFontSizeToFit>
-              {floatDisplay}
-            </Text>
-          </View>
-
-          {/* Clear button */}
-          <TouchableOpacity
-            style={styles.clearButton}
-            onPress={() => setFloatInput('')}
-            accessibilityRole="button"
-            accessibilityLabel="Clear amount"
-          >
-            <Text style={styles.clearButtonText}>Clear</Text>
-          </TouchableOpacity>
-
-          {/* Keypad */}
-          <View style={styles.keypad}>
-            {KEYPAD_ROWS.map((row, rowIdx) => (
-              <View key={`row-${rowIdx}`} style={styles.keypadRow}>
-                {row.map((key) => (
-                  <TouchableOpacity
-                    key={key}
-                    style={[styles.key, key === 'backspace' && styles.keyBackspace]}
-                    onPress={() => setFloatInput((prev) => handleKeypadPress(prev, key))}
-                    accessibilityRole="button"
-                    accessibilityLabel={
-                      key === 'backspace' ? 'Delete last digit' : key === '.' ? 'Decimal point' : `Number ${key}`
-                    }
-                    activeOpacity={0.6}
-                  >
-                    <Text style={[styles.keyText, key === 'backspace' && styles.keyBackspaceText]}>
-                      {key === 'backspace' ? '\u232B' : key}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            ))}
-          </View>
-        </View>
-
-        <View style={styles.footer}>
-          <TouchableOpacity
-            style={[styles.primaryBtn, (floatInput.length === 0 || Number.isNaN(Number.parseFloat(floatInput))) && styles.btnDisabled]}
-            onPress={handleOpenDrawer}
-            disabled={floatInput.length === 0 || Number.isNaN(Number.parseFloat(floatInput))}
-            accessibilityRole="button"
-            accessibilityLabel="Open drawer"
-          >
-            <Text style={styles.primaryBtnText}>Open Drawer</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
+    return renderOpenDrawerView(floatInput, setFloatInput, styles, colors, handleOpenDrawer);
   }
 
   // Close drawer view
   if (currentView === 'close') {
-    const closingTotal =
-      closingDenom.hundreds * 100 +
-      closingDenom.fifties * 50 +
-      closingDenom.twenties * 20 +
-      closingDenom.tens * 10 +
-      closingDenom.fives * 5 +
-      closingDenom.ones * 1 +
-      closingDenom.quarters * 0.25 +
-      closingDenom.dimes * 0.10 +
-      closingDenom.nickels * 0.05 +
-      closingDenom.pennies * 0.01;
-
-    const rounded = Math.round(closingTotal * 100) / 100;
-    const diff = Math.round((rounded - expectedBalance) * 100) / 100;
-    const diffColor = diff === 0 ? colors.success : diff > 0 ? colors.info : colors.error;
-    const diffLabel = diff === 0 ? 'Even' : diff > 0 ? `Over $${Math.abs(diff).toFixed(2)}` : `Short $${Math.abs(diff).toFixed(2)}`;
-
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Count Cash</Text>
-          <TouchableOpacity
-            onPress={() => setCashDrawerView('status')}
-            accessibilityRole="button"
-            accessibilityLabel="Back to status"
-          >
-            <Text style={styles.cancelText}>Cancel</Text>
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
-          <DenominationCounter denomination={closingDenom} onChange={setClosingDenom} />
-
-          <View style={styles.comparisonCard}>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Expected</Text>
-              <Text style={styles.summaryValue}>${expectedBalance.toFixed(2)}</Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Actual</Text>
-              <Text style={styles.summaryValue}>${rounded.toFixed(2)}</Text>
-            </View>
-            <View style={styles.divider} />
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabelBold}>Variance</Text>
-              <Text style={[styles.summaryValueBold, { color: diffColor }]}>{diffLabel}</Text>
-            </View>
-          </View>
-        </ScrollView>
-
-        <View style={styles.footer}>
-          <TouchableOpacity
-            style={styles.dangerBtn}
-            onPress={handleCloseDrawer}
-            accessibilityRole="button"
-            accessibilityLabel="Close drawer"
-          >
-            <Text style={styles.primaryBtnText}>Close Drawer</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
+    return renderCloseDrawerView(closingDenom, setClosingDenom, expectedBalance, styles, colors, setCashDrawerView, handleCloseDrawer);
   }
 
   // Add event view
   if (currentView === 'event') {
-    const eventAmountDisplay = eventAmountInput.length > 0 ? eventAmountInput : '0';
-    const canSubmit = eventAmountInput.length > 0 && !Number.isNaN(Number.parseFloat(eventAmountInput)) && Number.parseFloat(eventAmountInput) > 0 && eventReason.trim().length > 0;
-
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Add Event</Text>
-          <TouchableOpacity
-            onPress={() => setCashDrawerView('status')}
-            accessibilityRole="button"
-            accessibilityLabel="Back to status"
-          >
-            <Text style={styles.cancelText}>Cancel</Text>
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
-          {/* Event type picker */}
-          <Text style={styles.fieldLabel}>Event Type</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.typePicker}>
-            {EVENT_TYPE_OPTIONS.map((option) => (
-              <TouchableOpacity
-                key={option.type}
-                style={[styles.typePill, eventType === option.type && styles.typePillActive]}
-                onPress={() => setEventType(option.type)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: eventType === option.type }}
-              >
-                <Text style={[styles.typePillText, eventType === option.type && styles.typePillTextActive]}>
-                  {option.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          {/* Amount input */}
-          <Text style={styles.fieldLabel}>Amount</Text>
-          <View style={styles.display}>
-            <Text style={styles.dollarSign}>$</Text>
-            <Text style={styles.amount} numberOfLines={1} adjustsFontSizeToFit>
-              {eventAmountDisplay}
-            </Text>
-          </View>
-
-          {/* Clear */}
-          <TouchableOpacity
-            style={styles.clearButton}
-            onPress={() => setEventAmountInput('')}
-            accessibilityRole="button"
-            accessibilityLabel="Clear amount"
-          >
-            <Text style={styles.clearButtonText}>Clear</Text>
-          </TouchableOpacity>
-
-          {/* Keypad */}
-          <View style={styles.keypadSmall}>
-            {KEYPAD_ROWS.map((row, rowIdx) => (
-              <View key={`row-${rowIdx}`} style={styles.keypadRow}>
-                {row.map((key) => (
-                  <TouchableOpacity
-                    key={key}
-                    style={[styles.keySmall, key === 'backspace' && styles.keyBackspace]}
-                    onPress={() => setEventAmountInput((prev) => handleKeypadPress(prev, key))}
-                    accessibilityRole="button"
-                    accessibilityLabel={
-                      key === 'backspace' ? 'Delete last digit' : key === '.' ? 'Decimal point' : `Number ${key}`
-                    }
-                    activeOpacity={0.6}
-                  >
-                    <Text style={[styles.keyTextSmall, key === 'backspace' && styles.keyBackspaceText]}>
-                      {key === 'backspace' ? '\u232B' : key}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            ))}
-          </View>
-
-          {/* Reason */}
-          <Text style={styles.fieldLabel}>Reason</Text>
-          <TextInput
-            style={styles.textInput}
-            placeholder="Enter reason..."
-            placeholderTextColor={colors.textDisabled}
-            value={eventReason}
-            onChangeText={setEventReason}
-            accessibilityLabel="Event reason"
-          />
-        </ScrollView>
-
-        <View style={styles.footer}>
-          <TouchableOpacity
-            style={[styles.primaryBtn, !canSubmit && styles.btnDisabled]}
-            onPress={handleAddEvent}
-            disabled={!canSubmit}
-            accessibilityRole="button"
-            accessibilityLabel="Submit event"
-          >
-            <Text style={styles.primaryBtnText}>Submit Event</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
+    return renderAddEventView(eventType, setEventType, eventAmountInput, setEventAmountInput, eventReason, setEventReason, styles, colors, setCashDrawerView, handleAddEvent);
   }
 
   // Status view (default when drawer is open)
@@ -478,6 +227,331 @@ export default function CashDrawerScreen(_props: Readonly<CashDrawerScreenProps>
           <CashEventLog events={session?.events ?? []} />
         </View>
       </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function renderClosedSummary(
+  session: CashDrawerSession,
+  styles: ReturnType<typeof createStyles>,
+  colors: ReturnType<typeof useTheme>['colors'],
+  handleStartNewSession: () => void,
+): React.JSX.Element {
+  const variance = session.variance ?? 0;
+  const varianceColor = getVarianceColor(variance, colors);
+  const varianceLabel = getVarianceLabel(variance);
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>Cash Drawer</Text>
+        <View style={[styles.statusBadge, { backgroundColor: colors.errorLight }]}>
+          <Text style={[styles.statusBadgeText, { color: colors.error }]}>Closed</Text>
+        </View>
+      </View>
+
+      <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
+        <Text style={styles.sectionTitle}>Reconciliation Summary</Text>
+
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Opening Float</Text>
+            <Text style={styles.summaryValue}>${session.openingFloat.toFixed(2)}</Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Expected Balance</Text>
+            <Text style={styles.summaryValue}>${(session.expectedBalance ?? 0).toFixed(2)}</Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Actual Count</Text>
+            <Text style={styles.summaryValue}>${(session.closingTotal ?? 0).toFixed(2)}</Text>
+          </View>
+          <View style={styles.divider} />
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabelBold}>Variance</Text>
+            <Text style={[styles.summaryValueBold, { color: varianceColor }]}>
+              {varianceLabel}: ${Math.abs(variance).toFixed(2)}
+            </Text>
+          </View>
+        </View>
+
+        <Text style={styles.sectionTitle}>Event History ({session.events.length})</Text>
+        <View style={styles.eventLogContainer}>
+          <CashEventLog events={session.events} />
+        </View>
+      </ScrollView>
+
+      <View style={styles.footer}>
+        <TouchableOpacity
+          style={styles.primaryBtn}
+          onPress={handleStartNewSession}
+          accessibilityRole="button"
+          accessibilityLabel="Start new session"
+        >
+          <Text style={styles.primaryBtnText}>Start New Session</Text>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+function renderOpenDrawerView(
+  floatInput: string,
+  setFloatInput: React.Dispatch<React.SetStateAction<string>>,
+  styles: ReturnType<typeof createStyles>,
+  colors: ReturnType<typeof useTheme>['colors'],
+  handleOpenDrawer: () => void,
+): React.JSX.Element {
+  const floatDisplay = floatInput.length > 0 ? floatInput : '0';
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>Open Cash Drawer</Text>
+      </View>
+
+      <View style={styles.keypadContainer}>
+        <Text style={styles.keypadLabel}>Opening Float</Text>
+
+        {/* Amount display */}
+        <View style={styles.display}>
+          <Text style={styles.dollarSign}>$</Text>
+          <Text style={styles.amount} numberOfLines={1} adjustsFontSizeToFit>
+            {floatDisplay}
+          </Text>
+        </View>
+
+        {/* Clear button */}
+        <TouchableOpacity
+          style={styles.clearButton}
+          onPress={() => setFloatInput('')}
+          accessibilityRole="button"
+          accessibilityLabel="Clear amount"
+        >
+          <Text style={styles.clearButtonText}>Clear</Text>
+        </TouchableOpacity>
+
+        {/* Keypad */}
+        <View style={styles.keypad}>
+          {KEYPAD_ROWS.map((row, rowIdx) => (
+            <View key={KEYPAD_ROW_KEYS[rowIdx]} style={styles.keypadRow}>
+              {row.map((key) => (
+                <TouchableOpacity
+                  key={key}
+                  style={[styles.key, key === 'backspace' && styles.keyBackspace]}
+                  onPress={() => setFloatInput((prev) => handleKeypadPress(prev, key))}
+                  accessibilityRole="button"
+                  accessibilityLabel={getKeyAccessibilityLabel(key)}
+                  activeOpacity={0.6}
+                >
+                  <Text style={[styles.keyText, key === 'backspace' && styles.keyBackspaceText]}>
+                    {key === 'backspace' ? '\u232B' : key}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.footer}>
+        <TouchableOpacity
+          style={[styles.primaryBtn, (floatInput.length === 0 || Number.isNaN(Number.parseFloat(floatInput))) && styles.btnDisabled]}
+          onPress={handleOpenDrawer}
+          disabled={floatInput.length === 0 || Number.isNaN(Number.parseFloat(floatInput))}
+          accessibilityRole="button"
+          accessibilityLabel="Open drawer"
+        >
+          <Text style={styles.primaryBtnText}>Open Drawer</Text>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+function renderCloseDrawerView(
+  closingDenom: CashDenomination,
+  setClosingDenom: React.Dispatch<React.SetStateAction<CashDenomination>>,
+  expectedBalance: number,
+  styles: ReturnType<typeof createStyles>,
+  colors: ReturnType<typeof useTheme>['colors'],
+  setCashDrawerView: (view: CashDrawerView) => void,
+  handleCloseDrawer: () => void,
+): React.JSX.Element {
+  const closingTotal =
+    closingDenom.hundreds * 100 +
+    closingDenom.fifties * 50 +
+    closingDenom.twenties * 20 +
+    closingDenom.tens * 10 +
+    closingDenom.fives * 5 +
+    closingDenom.ones * 1 +
+    closingDenom.quarters * 0.25 +
+    closingDenom.dimes * 0.1 +
+    closingDenom.nickels * 0.05 +
+    closingDenom.pennies * 0.01;
+
+  const rounded = Math.round(closingTotal * 100) / 100;
+  const diff = Math.round((rounded - expectedBalance) * 100) / 100;
+  const diffColor = getVarianceColor(diff, colors);
+  const diffLabel = getDiffLabel(diff);
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>Count Cash</Text>
+        <TouchableOpacity
+          onPress={() => setCashDrawerView('status')}
+          accessibilityRole="button"
+          accessibilityLabel="Back to status"
+        >
+          <Text style={styles.cancelText}>Cancel</Text>
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
+        <DenominationCounter denomination={closingDenom} onChange={setClosingDenom} />
+
+        <View style={styles.comparisonCard}>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Expected</Text>
+            <Text style={styles.summaryValue}>${expectedBalance.toFixed(2)}</Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Actual</Text>
+            <Text style={styles.summaryValue}>${rounded.toFixed(2)}</Text>
+          </View>
+          <View style={styles.divider} />
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabelBold}>Variance</Text>
+            <Text style={[styles.summaryValueBold, { color: diffColor }]}>{diffLabel}</Text>
+          </View>
+        </View>
+      </ScrollView>
+
+      <View style={styles.footer}>
+        <TouchableOpacity
+          style={styles.dangerBtn}
+          onPress={handleCloseDrawer}
+          accessibilityRole="button"
+          accessibilityLabel="Close drawer"
+        >
+          <Text style={styles.primaryBtnText}>Close Drawer</Text>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+function renderAddEventView(
+  eventType: CashEventType,
+  setEventType: React.Dispatch<React.SetStateAction<CashEventType>>,
+  eventAmountInput: string,
+  setEventAmountInput: React.Dispatch<React.SetStateAction<string>>,
+  eventReason: string,
+  setEventReason: React.Dispatch<React.SetStateAction<string>>,
+  styles: ReturnType<typeof createStyles>,
+  colors: ReturnType<typeof useTheme>['colors'],
+  setCashDrawerView: (view: CashDrawerView) => void,
+  handleAddEvent: () => void,
+): React.JSX.Element {
+  const eventAmountDisplay = eventAmountInput.length > 0 ? eventAmountInput : '0';
+  const canSubmit = eventAmountInput.length > 0 && !Number.isNaN(Number.parseFloat(eventAmountInput)) && Number.parseFloat(eventAmountInput) > 0 && eventReason.trim().length > 0;
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>Add Event</Text>
+        <TouchableOpacity
+          onPress={() => setCashDrawerView('status')}
+          accessibilityRole="button"
+          accessibilityLabel="Back to status"
+        >
+          <Text style={styles.cancelText}>Cancel</Text>
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
+        {/* Event type picker */}
+        <Text style={styles.fieldLabel}>Event Type</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.typePicker}>
+          {EVENT_TYPE_OPTIONS.map((option) => (
+            <TouchableOpacity
+              key={option.type}
+              style={[styles.typePill, eventType === option.type && styles.typePillActive]}
+              onPress={() => setEventType(option.type)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: eventType === option.type }}
+            >
+              <Text style={[styles.typePillText, eventType === option.type && styles.typePillTextActive]}>
+                {option.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        {/* Amount input */}
+        <Text style={styles.fieldLabel}>Amount</Text>
+        <View style={styles.display}>
+          <Text style={styles.dollarSign}>$</Text>
+          <Text style={styles.amount} numberOfLines={1} adjustsFontSizeToFit>
+            {eventAmountDisplay}
+          </Text>
+        </View>
+
+        {/* Clear */}
+        <TouchableOpacity
+          style={styles.clearButton}
+          onPress={() => setEventAmountInput('')}
+          accessibilityRole="button"
+          accessibilityLabel="Clear amount"
+        >
+          <Text style={styles.clearButtonText}>Clear</Text>
+        </TouchableOpacity>
+
+        {/* Keypad */}
+        <View style={styles.keypadSmall}>
+          {KEYPAD_ROWS.map((row, rowIdx) => (
+            <View key={KEYPAD_ROW_KEYS[rowIdx]} style={styles.keypadRow}>
+              {row.map((key) => (
+                <TouchableOpacity
+                  key={key}
+                  style={[styles.keySmall, key === 'backspace' && styles.keyBackspace]}
+                  onPress={() => setEventAmountInput((prev) => handleKeypadPress(prev, key))}
+                  accessibilityRole="button"
+                  accessibilityLabel={getKeyAccessibilityLabel(key)}
+                  activeOpacity={0.6}
+                >
+                  <Text style={[styles.keyTextSmall, key === 'backspace' && styles.keyBackspaceText]}>
+                    {key === 'backspace' ? '\u232B' : key}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ))}
+        </View>
+
+        {/* Reason */}
+        <Text style={styles.fieldLabel}>Reason</Text>
+        <TextInput
+          style={styles.textInput}
+          placeholder="Enter reason..."
+          placeholderTextColor={colors.textDisabled}
+          value={eventReason}
+          onChangeText={setEventReason}
+          accessibilityLabel="Event reason"
+        />
+      </ScrollView>
+
+      <View style={styles.footer}>
+        <TouchableOpacity
+          style={[styles.primaryBtn, !canSubmit && styles.btnDisabled]}
+          onPress={handleAddEvent}
+          disabled={!canSubmit}
+          accessibilityRole="button"
+          accessibilityLabel="Submit event"
+        >
+          <Text style={styles.primaryBtnText}>Submit Event</Text>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }

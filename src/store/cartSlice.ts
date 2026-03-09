@@ -63,9 +63,10 @@ export const createCartSlice: StateCreator<CartSlice> = (set) => ({
   discountReason: '',
   checkPresented: false,
 
-  addItem: (item, modifiers = [], weightQuantity) =>
+  addItem: (item, modifiers, weightQuantity) =>
     set((state) => {
       cartItemCounter += 1;
+      const resolvedModifiers = modifiers ?? [];
       const isByWeight = item.soldByWeight === true && weightQuantity !== undefined;
       const cartItem: CartItem = {
         id: `cart-${cartItemCounter}`,
@@ -73,7 +74,7 @@ export const createCartSlice: StateCreator<CartSlice> = (set) => ({
         name: item.name,
         unitPrice: item.price,
         quantity: isByWeight ? weightQuantity : 1,
-        modifiers: modifiers.map((m) => ({
+        modifiers: resolvedModifiers.map((m) => ({
           modifierId: m.id,
           name: m.name,
           priceAdjustment: m.priceAdjustment,

@@ -78,7 +78,7 @@ export default function KioskMenuBrowser({
             style={styles.itemCard}
             onPress={() => onSelectItem(item)}
             accessibilityRole="button"
-            accessibilityLabel={`${item.name}, ${formatPrice(item.price)}${item.soldByWeight ? `, sold by ${item.weightUnit ?? 'lb'}` : ''}`}
+            accessibilityLabel={buildItemAccessibilityLabel(item)}
           >
             {item.image ? (
               <Image source={{ uri: item.image }} style={styles.itemImage} />
@@ -101,6 +101,15 @@ export default function KioskMenuBrowser({
       />
     </View>
   );
+}
+
+function buildItemAccessibilityLabel(item: TransformedMenuItem): string {
+  const priceLabel = formatPrice(item.price);
+  if (item.soldByWeight) {
+    const unit = item.weightUnit ?? 'lb';
+    return `${item.name}, ${priceLabel}, sold by ${unit}`;
+  }
+  return `${item.name}, ${priceLabel}`;
 }
 
 function formatPrice(price: string): string {

@@ -177,7 +177,7 @@ export default function PosTerminalScreen(_props: Readonly<PosTerminalScreenProp
       }
     };
 
-    void init();
+    init();
 
     const unsubNew = onNewOrder((event) => {
       addOrder(event.order);
@@ -288,11 +288,7 @@ export default function PosTerminalScreen(_props: Readonly<PosTerminalScreenProp
   // Compute totals for checkout overlay
   const discountType = useAppStore.getState().discountType;
   const discountValue = useAppStore.getState().discountValue;
-  const checkoutDiscountAmount = discountType === 'percentage'
-    ? subtotal * (discountValue / 100)
-    : discountType === 'comp'
-      ? subtotal
-      : (discountType === 'flat' ? discountValue : 0);
+  const checkoutDiscountAmount = computeDiscountAmount(discountType, discountValue, subtotal);
   const checkoutDiscountedSubtotal = Math.max(0, subtotal - checkoutDiscountAmount);
   const checkoutTax = checkoutDiscountedSubtotal * taxRate;
   const checkoutTotal = checkoutDiscountedSubtotal + checkoutTax;
@@ -303,9 +299,9 @@ export default function PosTerminalScreen(_props: Readonly<PosTerminalScreenProp
     setShowCheckout(true);
   }, []);
 
-  const handleCheckoutComplete = useCallback((orderId: string) => {
+  const handleCheckoutComplete = useCallback((_orderId: string) => {
     setShowCheckout(false);
-    showToast(`Order submitted successfully.`, 'success');
+    showToast('Order submitted successfully.', 'success');
   }, [showToast]);
 
   const handleCheckoutCancel = useCallback(() => {
@@ -456,7 +452,7 @@ export default function PosTerminalScreen(_props: Readonly<PosTerminalScreenProp
             onSendToKitchen={() => handleOpenCheckout('send')}
             onAddDiscount={handleAddDiscount}
             onVoidItem={handleVoidItem}
-            onPresentCheck={() => void handlePresentCheck()}
+            onPresentCheck={() => { handlePresentCheck(); }}
             isSubmitting={isSubmitting}
           />
         </View>
@@ -559,6 +555,17 @@ export default function PosTerminalScreen(_props: Readonly<PosTerminalScreenProp
       )}
     </SafeAreaView>
   );
+}
+
+function computeDiscountAmount(
+  discountType: string | null,
+  discountValue: number,
+  subtotal: number,
+): number {
+  if (discountType === 'percentage') return subtotal * (discountValue / 100);
+  if (discountType === 'comp') return subtotal;
+  if (discountType === 'flat') return discountValue;
+  return 0;
 }
 
 function createStyles(

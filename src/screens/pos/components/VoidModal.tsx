@@ -59,7 +59,7 @@ export default function VoidModal({
 
   const isVoid = mode === 'void';
   const headerTitle = isVoid ? 'Void Item' : 'Comp Item';
-  const effectiveReason = reason === 'Other' ? customReason.trim() : (isVoid ? reason : customReason.trim());
+  const effectiveReason = getEffectiveReason(reason, customReason, isVoid);
 
   const reasonValid = effectiveReason.length > 0;
   const pinValid = pin.length >= MIN_PIN_LENGTH;
@@ -74,37 +74,35 @@ export default function VoidModal({
     }
   }, [pin.length]);
 
+  const doResetState = useCallback(() => {
+    setStep('reason');
+    setReason('');
+    setCustomReason('');
+    setPin('');
+  }, []);
+
   const handleNext = useCallback(() => {
     if (!reasonValid) return;
     if (requireManagerPin) {
       setStep('pin');
     } else {
       onConfirm({ reason: effectiveReason });
-      resetState();
+      doResetState();
     }
-  }, [reasonValid, requireManagerPin, effectiveReason, onConfirm]);
+  }, [reasonValid, requireManagerPin, effectiveReason, onConfirm, doResetState]);
 
   const handlePinConfirm = useCallback(() => {
     if (!pinValid) return;
     onConfirm({ reason: effectiveReason, managerPin: pin });
-    resetState();
-  }, [pinValid, effectiveReason, pin, onConfirm]);
+    doResetState();
+  }, [pinValid, effectiveReason, pin, onConfirm, doResetState]);
 
   const handleCancel = useCallback(() => {
-    resetState();
+    doResetState();
     onCancel();
-  }, [onCancel]);
+  }, [onCancel, doResetState]);
 
-  function resetState() {
-    setStep('reason');
-    setReason('');
-    setCustomReason('');
-    setPin('');
-  }
-
-  const actionLabel = step === 'pin'
-    ? (isVoid ? 'Void' : 'Comp')
-    : (requireManagerPin ? 'Next' : (isVoid ? 'Void' : 'Comp'));
+  const actionLabel = getActionLabel(step, isVoid, requireManagerPin);
 
   const actionDisabled = step === 'pin' ? !pinValid : !reasonValid;
   const actionHandler = step === 'pin' ? handlePinConfirm : handleNext;
@@ -172,7 +170,7 @@ export default function VoidModal({
                   />
                   <View style={styles.infoNote}>
                     <Text style={styles.infoNoteText}>
-                      Item will remain on ticket at $0.00 for reporting
+                      Item will remain on ticket at $0 for reporting
                     </Text>
                   </View>
                 </>
@@ -206,17 +204,13 @@ export default function VoidModal({
                         ]}
                         onPress={() => handleKeyPress(key)}
                         accessibilityRole="button"
-                        accessibilityLabel={
-                          key === 'backspace' ? 'Delete last digit'
-                            : key === 'clear' ? 'Clear PIN'
-                              : `Number ${key}`
-                        }
+                        accessibilityLabel={getKeypadAccessibilityLabel(key)}
                       >
                         <Text style={[
                           styles.keypadBtnText,
                           (key === 'clear' || key === 'backspace') && styles.keypadBtnAccentText,
                         ]}>
-                          {key === 'backspace' ? '\u232B' : key === 'clear' ? 'CLR' : key}
+                          {getKeypadDisplayText(key)}
                         </Text>
                       </TouchableOpacity>
                     ))}
@@ -254,6 +248,31 @@ export default function VoidModal({
       </View>
     </Modal>
   );
+}
+
+function getEffectiveReason(reason: string, customReason: string, isVoid: boolean): string {
+  if (reason === 'Other') return customReason.trim();
+  if (isVoid) return reason;
+  return customReason.trim();
+}
+
+function getActionLabel(step: Step, isVoid: boolean, requireManagerPin: boolean): string {
+  const modeLabel = isVoid ? 'Void' : 'Comp';
+  if (step === 'pin') return modeLabel;
+  if (requireManagerPin) return 'Next';
+  return modeLabel;
+}
+
+function getKeypadAccessibilityLabel(key: string): string {
+  if (key === 'backspace') return 'Delete last digit';
+  if (key === 'clear') return 'Clear PIN';
+  return `Number ${key}`;
+}
+
+function getKeypadDisplayText(key: string): string {
+  if (key === 'backspace') return '\u232B';
+  if (key === 'clear') return 'CLR';
+  return key;
 }
 
 function createStyles(

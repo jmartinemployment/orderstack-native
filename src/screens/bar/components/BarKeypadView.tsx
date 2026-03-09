@@ -14,6 +14,12 @@ const KEYPAD_ROWS = [
   ['.', '0', 'backspace'],
 ];
 
+function getKeyAccessibilityLabel(key: string): string {
+  if (key === 'backspace') { return 'Delete last digit'; }
+  if (key === '.') { return 'Decimal point'; }
+  return `Number ${key}`;
+}
+
 export default function BarKeypadView({ value, onKeyPress }: Props): React.JSX.Element {
   const { colors, spacing, typography } = useTheme();
   const styles = createStyles(colors, spacing, typography);
@@ -42,8 +48,8 @@ export default function BarKeypadView({ value, onKeyPress }: Props): React.JSX.E
 
       {/* Keypad grid */}
       <View style={styles.keypad}>
-        {KEYPAD_ROWS.map((row, rowIdx) => (
-          <View key={`row-${rowIdx}`} style={styles.keypadRow}>
+        {KEYPAD_ROWS.map((row) => (
+          <View key={row.join('-')} style={styles.keypadRow}>
             {row.map((key) => (
               <TouchableOpacity
                 key={key}
@@ -53,9 +59,7 @@ export default function BarKeypadView({ value, onKeyPress }: Props): React.JSX.E
                 ]}
                 onPress={() => onKeyPress(key)}
                 accessibilityRole="button"
-                accessibilityLabel={
-                  key === 'backspace' ? 'Delete last digit' : key === '.' ? 'Decimal point' : `Number ${key}`
-                }
+                accessibilityLabel={getKeyAccessibilityLabel(key)}
                 activeOpacity={0.6}
               >
                 <Text

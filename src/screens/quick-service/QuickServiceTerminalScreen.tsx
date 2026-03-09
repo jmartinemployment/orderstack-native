@@ -79,7 +79,7 @@ export default function QuickServiceTerminalScreen(
   const [keypadValue, setKeypadValue] = useState('');
   const [isLoadingMenu, setIsLoadingMenu] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [deviceId, setDeviceIdState] = useState<string | null>(null);
+  const [deviceId, setDeviceId] = useState<string | null>(null);
   const [modifierItem, setModifierItem] = useState<TransformedMenuItem | null>(null);
 
   const { toast, showToast, dismissToast } = useToast();
@@ -113,7 +113,7 @@ export default function QuickServiceTerminalScreen(
         ]);
 
         setMenu(menuData);
-        setDeviceIdState(devId);
+        setDeviceId(devId);
         setTaxRateAction(settings.taxRate);
 
         // Auto-select first category
