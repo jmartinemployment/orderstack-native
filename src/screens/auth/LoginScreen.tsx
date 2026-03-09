@@ -22,10 +22,8 @@ type Phase = 'credentials' | 'restaurant-select';
 
 export default function LoginScreen({ navigation }: Readonly<LoginScreenProps>): React.JSX.Element {
   const { colors, spacing, typography } = useTheme();
-  const { setAuth, selectRestaurant } = useAppStore((s) => ({
-    setAuth: s.setAuth,
-    selectRestaurant: s.selectRestaurant,
-  }));
+  const setAuth = useAppStore((s) => s.setAuth);
+  const selectRestaurant = useAppStore((s) => s.selectRestaurant);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

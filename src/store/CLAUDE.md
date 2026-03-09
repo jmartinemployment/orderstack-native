@@ -13,13 +13,14 @@ Actions: setOrders, updateOrder (replaces full order object), addOrder, removeOr
 Persistence: NO — in-memory only
 
 ### cartSlice.ts
-State: items (CartItem[]), orderType (OrderType), tableId, tableNumber, specialInstructions
-CartItem: id, menuItemId, name, unitPrice, quantity, modifiers (CartItemModifier[]), specialInstructions
-Actions: addItem(TransformedMenuItem, TransformedModifier[]), removeItem, updateQuantity, clearCart, setOrderType, setTable, setSpecialInstructions
+State: items (CartItem[]), orderType (OrderType), tableId, tableNumber, specialInstructions, customerName, customerPhone, customerEmail
+CartItem: id, menuItemId, name, unitPrice, quantity, modifiers (CartItemModifier[]), specialInstructions, soldByWeight, weightUnit
+Actions: addItem(TransformedMenuItem, TransformedModifier[], weightQuantity?), removeItem, updateQuantity, clearCart, setOrderType, setTable, setSpecialInstructions, setCustomerName, setCustomerPhone, setCustomerEmail
 Persistence: NO — in-memory only, cart resets on app restart
+Note: clearCart resets customer info (name, phone, email) along with items and table
 
 ## Selectors
-Use typed selectors: useToken(), useSelectedRestaurantId(), useAuthUser(), useRestaurants(), useActiveOrders(), useSelectedOrder(), useCartItems(), useOrderType(), useCartTable()
+Use typed selectors: useToken(), useSelectedRestaurantId(), useAuthUser(), useRestaurants(), useActiveOrders(), useSelectedOrder(), useCartItems(), useOrderType(), useCartTable(), useCustomerInfo()
 
 ## Key Change from Initial Scaffold
 - merchantId is now selectedRestaurantId (login returns restaurants[], user picks one)

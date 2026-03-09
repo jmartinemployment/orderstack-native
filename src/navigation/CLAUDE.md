@@ -13,16 +13,22 @@ RootNavigator (NavigationContainer)
 +-- Kiosk (NativeStackNavigator<KioskStackParamList>)
 |   +-- KioskHome -- KioskHomeScreen
 +-- Register (NativeStackNavigator<RegisterStackParamList>)
-    +-- RegisterMain -- RegisterScreen
+|   +-- RegisterMain -- RegisterScreen
++-- Bar (NativeStackNavigator<BarStackParamList>)
+|   +-- BarTerminal -- BarTerminalScreen
++-- QuickService (NativeStackNavigator<QuickServiceStackParamList>)
+    +-- QuickServiceTerminal -- QuickServiceTerminalScreen
 ```
 
 ## Route Names
 - Auth/Login -- unauthenticated login screen
-- ModeSelect -- operator selects POS/KDS/Kiosk/Register
+- ModeSelect -- operator selects POS/KDS/Kiosk/Register/Bar/Quick Service
 - Pos/PosTerminal -- POS mode entry point
 - Kds/KdsDisplay -- KDS mode entry point
 - Kiosk/KioskHome -- Kiosk mode entry point
 - Register/RegisterMain -- Register mode entry point
+- Bar/BarTerminal -- Bar Terminal mode entry point
+- QuickService/QuickServiceTerminal -- Quick Service counter terminal entry point
 
 ## navigationRef
 `src/navigation/navigationRef.ts` exports a typed `createNavigationContainerRef<RootStackParamList>`.

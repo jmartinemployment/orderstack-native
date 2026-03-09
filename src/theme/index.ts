@@ -42,7 +42,7 @@ type ThemeProviderProps = Readonly<{
 
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children, forceDark }) => {
   const colorScheme = useColorScheme();
-  const isDark = forceDark !== undefined ? forceDark : colorScheme === 'dark';
+  const isDark = forceDark === undefined ? colorScheme === 'dark' : forceDark;
   const theme = isDark ? darkTheme : lightTheme;
 
   return React.createElement(ThemeContext.Provider, { value: theme }, children);

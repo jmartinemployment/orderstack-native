@@ -61,7 +61,7 @@ export default function ActiveOrdersDrawer({ visible, onClose, onSelectOrder }: 
               </View>
               <View style={styles.orderMeta}>
                 <Text style={styles.metaText}>
-                  {order.orderItems.length} item{order.orderItems.length !== 1 ? 's' : ''}
+                  {order.orderItems.length} item{order.orderItems.length === 1 ? '' : 's'}
                 </Text>
                 <Text style={styles.metaText}>${Number.parseFloat(order.total).toFixed(2)}</Text>
                 <Text style={styles.elapsed}>{elapsed}</Text>
