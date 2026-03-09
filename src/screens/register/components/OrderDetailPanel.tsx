@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,8 @@ import {
   Alert,
 } from 'react-native';
 import { useTheme } from '@theme/index';
+import { useAppStore } from '@store/index';
+import PaymentTerminalModal from '@components/common/PaymentTerminalModal';
 import type { Order, OrderStatus } from '@models/index';
 
 type Props = Readonly<{
@@ -26,8 +28,12 @@ const NEXT_STATUS: Partial<Record<OrderStatus, { next: OrderStatus; label: strin
 export default function OrderDetailPanel({ order, onUpdateStatus, isUpdating }: Props): React.JSX.Element {
   const { colors, spacing, typography } = useTheme();
   const styles = createStyles(colors, spacing, typography);
+  const paymentProcessor = useAppStore((s) => s.paymentProcessor);
+
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   const nextAction = NEXT_STATUS[order.status];
+  const showCollectPayment = order.status === 'ready' && paymentProcessor !== 'none';
 
   const handleCancel = () => {
     Alert.alert('Cancel Order?', `Cancel order #${order.orderNumber}?`, [
@@ -35,6 +41,23 @@ export default function OrderDetailPanel({ order, onUpdateStatus, isUpdating }: 
       { text: 'Cancel Order', style: 'destructive', onPress: () => onUpdateStatus(order.id, 'cancelled') },
     ]);
   };
+
+  const handleCollectPayment = () => {
+    setShowPaymentModal(true);
+  };
+
+  const handlePaymentComplete = useCallback(() => {
+    setShowPaymentModal(false);
+    onUpdateStatus(order.id, 'completed');
+  }, [order.id, onUpdateStatus]);
+
+  const handlePaymentFailed = useCallback((_error: string) => {
+    setShowPaymentModal(false);
+  }, []);
+
+  const handlePaymentCancel = useCallback(() => {
+    setShowPaymentModal(false);
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -130,6 +153,17 @@ export default function OrderDetailPanel({ order, onUpdateStatus, isUpdating }: 
 
       {/* Actions */}
       <View style={styles.actions}>
+        {showCollectPayment && (
+          <TouchableOpacity
+            style={[styles.paymentBtn, isUpdating && styles.actionDisabled]}
+            onPress={handleCollectPayment}
+            disabled={isUpdating}
+            accessibilityRole="button"
+            accessibilityLabel={`Collect payment for order ${order.orderNumber}`}
+          >
+            <Text style={styles.paymentBtnText}>Collect Payment</Text>
+          </TouchableOpacity>
+        )}
         {nextAction && (
           <TouchableOpacity
             style={[styles.actionBtn, { backgroundColor: colors[nextAction.color] }, isUpdating && styles.actionDisabled]}
@@ -153,6 +187,16 @@ export default function OrderDetailPanel({ order, onUpdateStatus, isUpdating }: 
           </TouchableOpacity>
         )}
       </View>
+
+      {/* Payment Terminal Modal */}
+      <PaymentTerminalModal
+        visible={showPaymentModal}
+        amount={Number.parseFloat(order.total)}
+        orderId={order.id}
+        onPaymentComplete={handlePaymentComplete}
+        onPaymentFailed={handlePaymentFailed}
+        onCancel={handlePaymentCancel}
+      />
     </View>
   );
 }
@@ -196,6 +240,8 @@ function createStyles(
     actionBtn: { flex: 2, paddingVertical: spacing.md, borderRadius: 12, alignItems: 'center' },
     actionBtnText: { fontSize: typography.fontSize.md, fontWeight: typography.fontWeight.bold, color: colors.textInverse },
     actionDisabled: { opacity: 0.4 },
+    paymentBtn: { flex: 2, paddingVertical: spacing.md, borderRadius: 12, backgroundColor: colors.success, alignItems: 'center' },
+    paymentBtnText: { fontSize: typography.fontSize.md, fontWeight: typography.fontWeight.bold, color: colors.textInverse },
     cancelBtn: { flex: 1, paddingVertical: spacing.md, borderRadius: 12, borderWidth: 1, borderColor: colors.error, alignItems: 'center' },
     cancelBtnText: { fontSize: typography.fontSize.md, fontWeight: typography.fontWeight.semibold, color: colors.error },
   });

@@ -190,3 +190,22 @@ When a bug is found, trace it to the root cause and fix that. Do not patch sympt
 - All 4 modes complete: POS, KDS, Kiosk, Register
 - Zero TypeScript errors, zero ESLint errors
 - Next: Bar mode (user will provide separate prompt), iOS rebuild to verify new screens
+
+**2026-03-09 (Session 4):**
+- Quick Service Terminal fully built: QuickServiceTerminalScreen — single-mode counter-service POS
+- Navigation: QuickService added to RootStackParamList, QuickServiceStackParamList, QuickServiceNavigator in RootNavigator
+- ModeSelectScreen: added Quick Service as 6th mode (Counter Service Terminal)
+- BarSalePanel: added optional primaryButtonLabel prop (default "Charge $X.XX", Quick Service uses "Send to Kitchen")
+- OrderSource type: added 'quick-service' to union type in models/index.ts
+- Reuses Bar components (BarCategoryPills, BarItemGrid, BarSalePanel, BarKeypadView) and POS components (TopNavigationTabs, ModifierModal)
+- Uses Toast + useToast for notifications (same as POS)
+- Orders submitted as orderSource 'quick-service', orderType 'pickup'
+- Zero TypeScript errors, zero ESLint errors
+
+**2026-03-09 (Session 5):**
+- Kiosk fixes: dynamic tax rate from settings API, WeightScaleModal for soldByWeight items, filterTerminalItems on menu items, weight labels in cart
+- Register fixes: settings load on mount (tax rate + payment processor), "Collect Payment" button on ready orders, toast notifications for status updates, ConnectionStatus indicator in header
+- CartSlice: added soldByWeight/weightUnit to CartItem, addItem accepts optional weightQuantity
+- Created WeightScaleModal component (numeric keypad, estimated total, confirm/cancel)
+- Fixed ESLint: optional chain in terminalMenuUtils, useMemo dependency in KioskMenuBrowser
+- Zero TypeScript errors, zero ESLint errors

@@ -13,7 +13,7 @@ import { apiClient } from '@api/client';
 import type { ModeSelectScreenProps } from '@navigation/types';
 
 type OperatingMode = {
-  id: 'Pos' | 'Kds' | 'Kiosk' | 'Register';
+  id: 'Pos' | 'Kds' | 'Kiosk' | 'Register' | 'Bar' | 'QuickService' | 'CashDrawer';
   label: string;
   description: string;
 };
@@ -23,6 +23,9 @@ const MODES: OperatingMode[] = [
   { id: 'Kds', label: 'KDS', description: 'Kitchen Display System' },
   { id: 'Kiosk', label: 'Kiosk', description: 'Self-Service Ordering' },
   { id: 'Register', label: 'Register', description: 'Cashier Transaction Processing' },
+  { id: 'Bar', label: 'Bar', description: 'Bar Terminal & Drink Orders' },
+  { id: 'QuickService', label: 'Quick Service', description: 'Counter Service Terminal' },
+  { id: 'CashDrawer', label: 'Cash Drawer', description: 'Cash Management & Reconciliation' },
 ];
 
 export default function ModeSelectScreen({ navigation }: Readonly<ModeSelectScreenProps>): React.JSX.Element {
@@ -51,15 +54,13 @@ export default function ModeSelectScreen({ navigation }: Readonly<ModeSelectScre
     navigation.navigate(modeId);
   };
 
-  const statusColor =
-    backendStatus === 'online'
-      ? colors.success
-      : backendStatus === 'offline'
-      ? colors.error
-      : colors.textSecondary;
-
-  const statusLabel =
-    backendStatus === 'online' ? 'Online' : backendStatus === 'offline' ? 'Offline' : 'Checking...';
+  const STATUS_MAP: Record<typeof backendStatus, { color: string; label: string }> = {
+    online: { color: colors.success, label: 'Online' },
+    offline: { color: colors.error, label: 'Offline' },
+    checking: { color: colors.textSecondary, label: 'Checking...' },
+  };
+  const statusColor = STATUS_MAP[backendStatus].color;
+  const statusLabel = STATUS_MAP[backendStatus].label;
 
   return (
     <SafeAreaView style={styles.container}>

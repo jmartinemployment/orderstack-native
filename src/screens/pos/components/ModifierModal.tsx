@@ -93,7 +93,7 @@ export default function ModifierModal({ visible, item, onConfirm, onCancel }: Pr
                         onPress={() => toggleModifier(group, mod)}
                         accessibilityRole="checkbox"
                         accessibilityState={{ checked: isSelected }}
-                        accessibilityLabel={`${mod.name}${adj > 0 ? `, add ${adj.toFixed(2)} dollars` : ''}`}
+                        accessibilityLabel={`${mod.name}${adj > 0 ? `, add ${String(adj.toFixed(2))} dollars` : ''}`}
                       >
                         <View style={[styles.radio, isSelected && styles.radioSelected]} />
                         <Text style={[styles.optionName, isSelected && styles.optionNameSelected]}>

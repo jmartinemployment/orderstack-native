@@ -55,7 +55,7 @@ export default function OrderListItem({ order, isSelected, onPress }: Props): Re
       <View style={styles.metaRow}>
         <Text style={styles.meta}>{order.orderType.replaceAll('_', ' ')}</Text>
         <Text style={styles.metaDot}>{'\u2022'}</Text>
-        <Text style={styles.meta}>{itemCount} item{itemCount !== 1 ? 's' : ''}</Text>
+        <Text style={styles.meta}>{itemCount} item{itemCount === 1 ? '' : 's'}</Text>
         <Text style={styles.metaDot}>{'\u2022'}</Text>
         <Text style={styles.meta}>{elapsedStr}</Text>
       </View>

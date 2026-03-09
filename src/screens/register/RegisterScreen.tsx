@@ -12,14 +12,27 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@theme/index';
 import { useAppStore, useSelectedRestaurantId, useActiveOrders } from '@store/index';
 import { getOrders, updateOrderStatus } from '@api/orders';
+import { getRestaurantSettings } from '@api/settings';
 import { getDeviceId } from '@services/deviceService';
-import { connectSocket, joinRestaurant, onNewOrder, onOrderUpdated, disconnectSocket } from '@services/socketService';
+import { connectSocket, joinRestaurant, onNewOrder, onOrderUpdated, disconnectSocket, getSocket } from '@services/socketService';
+import { useToast } from '@hooks/useToast';
+import Toast from '@components/common/Toast';
+import ConnectionStatus from '../kds/components/ConnectionStatus';
 import OrderListItem from './components/OrderListItem';
 import OrderDetailPanel from './components/OrderDetailPanel';
 import type { OrderStatus } from '@models/index';
 import type { RegisterScreenProps } from '@navigation/types';
 
 type RegisterFilter = 'active' | 'completed' | 'cancelled';
+
+const STATUS_LABELS: Record<string, string> = {
+  pending: 'New',
+  confirmed: 'Confirmed',
+  preparing: 'Preparing',
+  ready: 'Ready',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+};
 
 export default function RegisterScreen(_props: Readonly<RegisterScreenProps>): React.JSX.Element {
   const { colors, spacing, typography } = useTheme();
@@ -29,16 +42,21 @@ export default function RegisterScreen(_props: Readonly<RegisterScreenProps>): R
   const setOrders = useAppStore((s) => s.setOrders);
   const addOrder = useAppStore((s) => s.addOrder);
   const updateOrder = useAppStore((s) => s.updateOrder);
+  const setTaxRate = useAppStore((s) => s.setTaxRate);
+  const setPaymentProcessor = useAppStore((s) => s.setPaymentProcessor);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [filter, setFilter] = useState<RegisterFilter>('active');
   const [completedOrders, setCompletedOrders] = useState<typeof orders>([]);
+  const [isConnected, setIsConnected] = useState(false);
+
+  const { toast, showToast, dismissToast } = useToast();
 
   const styles = createStyles(colors, spacing, typography);
 
-  // Load orders and connect socket
+  // Load orders, settings, and connect socket
   useEffect(() => {
     if (!restaurantId || !token) { return; }
 
@@ -52,6 +70,15 @@ export default function RegisterScreen(_props: Readonly<RegisterScreenProps>): R
         ]);
         setOrders(activeData);
         setCompletedOrders(completedData);
+
+        // Load settings for tax rate and payment processor
+        try {
+          const settings = await getRestaurantSettings(restaurantId);
+          setTaxRate(settings.taxRate);
+          setPaymentProcessor(settings.paymentSettings.processor);
+        } catch {
+          // Settings are optional — defaults work
+        }
 
         connectSocket(token);
         joinRestaurant({ restaurantId, deviceId: devId, deviceType: 'pos' });
@@ -73,11 +100,27 @@ export default function RegisterScreen(_props: Readonly<RegisterScreenProps>): R
       unsubUpdated();
       disconnectSocket();
     };
-  }, [restaurantId, token, setOrders, addOrder, updateOrder]);
+  }, [restaurantId, token, setOrders, addOrder, updateOrder, setTaxRate, setPaymentProcessor]);
+
+  // Connection status polling
+  useEffect(() => {
+    const checkConnection = () => {
+      const sock = getSocket();
+      setIsConnected(sock?.connected ?? false);
+    };
+    checkConnection();
+    const interval = setInterval(checkConnection, 2000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleUpdateStatus = useCallback(async (orderId: string, status: OrderStatus) => {
     if (!restaurantId) { return; }
     setIsUpdating(true);
+
+    // Find the order for toast message
+    const targetOrder = [...orders, ...completedOrders].find((o) => o.id === orderId);
+    const orderNum = targetOrder?.orderNumber ?? '';
+
     try {
       const updated = await updateOrderStatus(restaurantId, orderId, status);
       updateOrder(updated);
@@ -87,18 +130,29 @@ export default function RegisterScreen(_props: Readonly<RegisterScreenProps>): R
         setCompletedOrders((prev) => [updated, ...prev]);
         setSelectedOrderId(null);
       }
+
+      // Show success toast
+      if (status === 'cancelled') {
+        showToast(`Order #${orderNum} cancelled`, 'success');
+      } else {
+        const statusLabel = STATUS_LABELS[status] ?? status;
+        showToast(`Order #${orderNum} moved to ${statusLabel}`, 'success');
+      }
     } catch {
-      Alert.alert('Update Failed', 'Could not update order status.');
+      showToast(`Failed to update order #${orderNum}`, 'error');
     } finally {
       setIsUpdating(false);
     }
-  }, [restaurantId, updateOrder]);
+  }, [restaurantId, updateOrder, orders, completedOrders, showToast]);
 
-  const filteredOrders = filter === 'active'
-    ? orders
-    : filter === 'completed'
-      ? completedOrders.filter((o) => o.status === 'completed')
-      : completedOrders.filter((o) => o.status === 'cancelled');
+  let filteredOrders: typeof orders;
+  if (filter === 'active') {
+    filteredOrders = orders;
+  } else if (filter === 'completed') {
+    filteredOrders = completedOrders.filter((o) => o.status === 'completed');
+  } else {
+    filteredOrders = completedOrders.filter((o) => o.status === 'cancelled');
+  }
 
   // Sort: newest first for register view
   const sortedOrders = [...filteredOrders].sort(
@@ -122,7 +176,10 @@ export default function RegisterScreen(_props: Readonly<RegisterScreenProps>): R
     <SafeAreaView style={styles.container}>
       {/* Top bar */}
       <View style={styles.topBar}>
-        <Text style={styles.title}>Register</Text>
+        <View style={styles.topBarLeft}>
+          <Text style={styles.title}>Register</Text>
+          <ConnectionStatus isConnected={isConnected} />
+        </View>
         <Text style={styles.count}>{orders.length} active</Text>
       </View>
 
@@ -187,6 +244,9 @@ export default function RegisterScreen(_props: Readonly<RegisterScreenProps>): R
           )}
         </View>
       </View>
+
+      {/* Toast notification */}
+      {toast && <Toast toast={toast} onDismiss={dismissToast} />}
     </SafeAreaView>
   );
 }
@@ -201,6 +261,7 @@ function createStyles(
     loadingContainer: { flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' },
     loadingText: { fontSize: typography.fontSize.md, color: colors.textSecondary, marginTop: spacing.md },
     topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
+    topBarLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
     title: { fontSize: typography.fontSize.xl, fontWeight: typography.fontWeight.bold, color: colors.textPrimary },
     count: { fontSize: typography.fontSize.md, fontWeight: typography.fontWeight.semibold, color: colors.primary },
     filterRow: { flexDirection: 'row', paddingHorizontal: spacing.sm, paddingVertical: spacing.sm, gap: spacing.xs, borderBottomWidth: 1, borderBottomColor: colors.border },

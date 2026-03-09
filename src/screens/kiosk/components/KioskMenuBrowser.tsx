@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { useTheme } from '@theme/index';
+import { filterTerminalItems } from '@utils/terminalMenuUtils';
 import type { TransformedMenuCategory, TransformedMenuItem } from '@models/index';
 
 type Props = Readonly<{
@@ -27,7 +28,12 @@ export default function KioskMenuBrowser({
   const styles = createStyles(colors, spacing, typography);
 
   const selectedCategory = categories.find((c) => c.id === selectedCategoryId);
-  const items = selectedCategory?.items ?? [];
+
+  // Filter to active, non-86'd, terminal-visible items
+  const visibleItems = useMemo(() => {
+    const items = selectedCategory?.items ?? [];
+    return filterTerminalItems(items);
+  }, [selectedCategory]);
 
   return (
     <View style={styles.container}>
@@ -56,7 +62,7 @@ export default function KioskMenuBrowser({
 
       {/* Item grid */}
       <FlatList
-        data={items}
+        data={visibleItems}
         numColumns={2}
         keyExtractor={(item) => item.id}
         style={styles.itemGrid}
@@ -72,7 +78,7 @@ export default function KioskMenuBrowser({
             style={styles.itemCard}
             onPress={() => onSelectItem(item)}
             accessibilityRole="button"
-            accessibilityLabel={`${item.name}, ${formatPrice(item.price)}`}
+            accessibilityLabel={`${item.name}, ${formatPrice(item.price)}${item.soldByWeight ? `, sold by ${item.weightUnit ?? 'lb'}` : ''}`}
           >
             {item.image ? (
               <Image source={{ uri: item.image }} style={styles.itemImage} />
@@ -86,7 +92,9 @@ export default function KioskMenuBrowser({
               {item.description && (
                 <Text style={styles.itemDesc} numberOfLines={2}>{item.description}</Text>
               )}
-              <Text style={styles.itemPrice}>{formatPrice(item.price)}</Text>
+              <Text style={styles.itemPrice}>
+                {formatPrice(item.price)}{item.soldByWeight ? `/${item.weightUnit ?? 'lb'}` : ''}
+              </Text>
             </View>
           </TouchableOpacity>
         )}

@@ -11,11 +11,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@theme/index';
 import { useAppStore, useSelectedRestaurantId } from '@store/index';
 import { getFullMenu } from '@api/menu';
+import { getRestaurantSettings } from '@api/settings';
 import { createOrder } from '@api/orders';
 import { getDeviceId } from '@services/deviceService';
 import KioskMenuBrowser from './components/KioskMenuBrowser';
 import KioskCart from './components/KioskCart';
 import ModifierModal from '../pos/components/ModifierModal';
+import WeightScaleModal from '@components/common/WeightScaleModal';
 import type {
   TransformedMenuCategory,
   TransformedMenuItem,
@@ -33,6 +35,7 @@ export default function KioskHomeScreen(_props: Readonly<KioskHomeScreenProps>):
   const clearCart = useAppStore((s) => s.clearCart);
   const cartItems = useAppStore((s) => s.items);
   const setOrderType = useAppStore((s) => s.setOrderType);
+  const setTaxRate = useAppStore((s) => s.setTaxRate);
 
   const [phase, setPhase] = useState<KioskPhase>('welcome');
   const [menu, setMenu] = useState<TransformedMenuCategory[]>([]);
@@ -45,9 +48,12 @@ export default function KioskHomeScreen(_props: Readonly<KioskHomeScreenProps>):
   // Modifier modal state
   const [modifierItem, setModifierItem] = useState<TransformedMenuItem | null>(null);
 
+  // Weight scale modal state
+  const [weightItem, setWeightItem] = useState<TransformedMenuItem | null>(null);
+
   const styles = createStyles(colors, spacing, typography);
 
-  // Load menu on mount
+  // Load menu and settings on mount
   useEffect(() => {
     if (!restaurantId) { return; }
 
@@ -63,6 +69,14 @@ export default function KioskHomeScreen(_props: Readonly<KioskHomeScreenProps>):
         if (menuData.length > 0) {
           setSelectedCategoryId(menuData[0].id);
         }
+
+        // Load settings for dynamic tax rate
+        try {
+          const settings = await getRestaurantSettings(restaurantId);
+          setTaxRate(settings.taxRate);
+        } catch {
+          // Settings are optional — default tax rate from store works
+        }
       } catch (err) {
         console.error('[Kiosk] Init error:', err);
         Alert.alert('Load Error', 'Failed to load menu. Please try again.');
@@ -72,7 +86,7 @@ export default function KioskHomeScreen(_props: Readonly<KioskHomeScreenProps>):
     };
 
     void init();
-  }, [restaurantId]);
+  }, [restaurantId, setTaxRate]);
 
   const handleStartOrder = useCallback(() => {
     clearCart();
@@ -81,6 +95,12 @@ export default function KioskHomeScreen(_props: Readonly<KioskHomeScreenProps>):
   }, [clearCart, setOrderType]);
 
   const handleItemPress = useCallback((item: TransformedMenuItem) => {
+    // Weight items show the weight scale modal
+    if (item.soldByWeight) {
+      setWeightItem(item);
+      return;
+    }
+
     if (item.modifierGroups.length > 0) {
       setModifierItem(item);
     } else {
@@ -94,6 +114,13 @@ export default function KioskHomeScreen(_props: Readonly<KioskHomeScreenProps>):
     }
     setModifierItem(null);
   }, [modifierItem, addItem]);
+
+  const handleWeightConfirm = useCallback((weight: number) => {
+    if (weightItem) {
+      addItem(weightItem, [], weight);
+    }
+    setWeightItem(null);
+  }, [weightItem, addItem]);
 
   const handleCheckout = useCallback(async () => {
     if (!restaurantId || !deviceId || cartItems.length === 0) { return; }
@@ -232,6 +259,18 @@ export default function KioskHomeScreen(_props: Readonly<KioskHomeScreenProps>):
           item={modifierItem}
           onConfirm={handleModifierConfirm}
           onCancel={() => setModifierItem(null)}
+        />
+      )}
+
+      {/* Weight scale modal */}
+      {weightItem && (
+        <WeightScaleModal
+          visible={true}
+          itemName={weightItem.name}
+          unitPrice={Number.parseFloat(weightItem.price)}
+          weightUnit={weightItem.weightUnit ?? 'lb'}
+          onConfirm={handleWeightConfirm}
+          onCancel={() => setWeightItem(null)}
         />
       )}
     </SafeAreaView>

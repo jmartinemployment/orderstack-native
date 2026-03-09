@@ -20,6 +20,7 @@ export default function KioskCart({ onCheckout, isSubmitting }: Props): React.JS
   const items = useCartItems();
   const updateQuantity = useAppStore((s) => s.updateQuantity);
   const removeItem = useAppStore((s) => s.removeItem);
+  const taxRate = useAppStore((s) => s.taxRate);
   const styles = createStyles(colors, spacing, typography);
 
   const subtotal = items.reduce((sum, item) => {
@@ -27,7 +28,7 @@ export default function KioskCart({ onCheckout, isSubmitting }: Props): React.JS
     const mods = item.modifiers.reduce((s, m) => s + Number.parseFloat(m.priceAdjustment) * item.quantity, 0);
     return sum + base + mods;
   }, 0);
-  const tax = subtotal * 0.07;
+  const tax = subtotal * taxRate;
   const total = subtotal + tax;
 
   if (items.length === 0) {
@@ -52,8 +53,8 @@ export default function KioskCart({ onCheckout, isSubmitting }: Props): React.JS
             colors={colors}
             spacing={spacing}
             typography={typography}
-            onIncrement={() => updateQuantity(item.id, item.quantity + 1)}
-            onDecrement={() => item.quantity <= 1 ? removeItem(item.id) : updateQuantity(item.id, item.quantity - 1)}
+            onIncrement={() => item.soldByWeight ? undefined : updateQuantity(item.id, item.quantity + 1)}
+            onDecrement={() => item.soldByWeight ? removeItem(item.id) : (item.quantity <= 1 ? removeItem(item.id) : updateQuantity(item.id, item.quantity - 1))}
           />
         )}
       />
@@ -81,7 +82,7 @@ export default function KioskCart({ onCheckout, isSubmitting }: Props): React.JS
   );
 }
 
-function TotalRow({ label, value, styles }: { label: string; value: number; styles: ReturnType<typeof createStyles> }): React.JSX.Element {
+function TotalRow({ label, value, styles }: Readonly<{ label: string; value: number; styles: ReturnType<typeof createStyles> }>): React.JSX.Element {
   return (
     <View style={styles.totalRow}>
       <Text style={styles.totalLabel}>{label}</Text>
@@ -105,6 +106,7 @@ function KioskCartItem({ item, colors, spacing, typography, onIncrement, onDecre
     info: { flex: 1 },
     name: { fontSize: typography.fontSize.md, fontWeight: typography.fontWeight.semibold, color: colors.textPrimary },
     mods: { fontSize: typography.fontSize.sm, color: colors.textSecondary, marginTop: 1 },
+    weightLabel: { fontSize: typography.fontSize.sm, color: colors.primary, marginTop: 1, fontWeight: typography.fontWeight.medium },
     controls: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
     btn: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.gray100, justifyContent: 'center', alignItems: 'center' },
     btnText: { fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, color: colors.textPrimary },
@@ -117,13 +119,24 @@ function KioskCartItem({ item, colors, spacing, typography, onIncrement, onDecre
     <View style={s.row}>
       <View style={s.info}>
         <Text style={s.name}>{item.name}</Text>
+        {item.soldByWeight && item.weightUnit ? (
+          <Text style={s.weightLabel}>
+            {item.quantity.toFixed(2)} {item.weightUnit} @ ${Number.parseFloat(item.unitPrice).toFixed(2)}/{item.weightUnit}
+          </Text>
+        ) : null}
         {item.modifiers.length > 0 && <Text style={s.mods}>{item.modifiers.map((m) => m.name).join(', ')}</Text>}
       </View>
-      <View style={s.controls}>
-        <TouchableOpacity style={s.btn} onPress={onDecrement} accessibilityLabel="Decrease"><Text style={s.btnText}>{item.quantity <= 1 ? '\u2715' : '\u2212'}</Text></TouchableOpacity>
-        <Text style={s.qty}>{item.quantity}</Text>
-        <TouchableOpacity style={s.btn} onPress={onIncrement} accessibilityLabel="Increase"><Text style={s.btnText}>+</Text></TouchableOpacity>
-      </View>
+      {item.soldByWeight ? (
+        <TouchableOpacity style={s.btn} onPress={onDecrement} accessibilityLabel="Remove weight item" accessibilityRole="button">
+          <Text style={s.btnText}>{'\u2715'}</Text>
+        </TouchableOpacity>
+      ) : (
+        <View style={s.controls}>
+          <TouchableOpacity style={s.btn} onPress={onDecrement} accessibilityLabel="Decrease" accessibilityRole="button"><Text style={s.btnText}>{item.quantity <= 1 ? '\u2715' : '\u2212'}</Text></TouchableOpacity>
+          <Text style={s.qty}>{item.quantity}</Text>
+          <TouchableOpacity style={s.btn} onPress={onIncrement} accessibilityLabel="Increase" accessibilityRole="button"><Text style={s.btnText}>+</Text></TouchableOpacity>
+        </View>
+      )}
       <Text style={s.price}>${lineTotal.toFixed(2)}</Text>
     </View>
   );

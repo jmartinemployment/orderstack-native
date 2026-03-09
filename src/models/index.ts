@@ -112,6 +112,8 @@ export interface TransformedMenuCategory {
   name: string;
   description: string | null;
   image: string | null;
+  color?: string;
+  subcategories?: TransformedMenuCategory[];
   items: TransformedMenuItem[];
 }
 
@@ -122,6 +124,15 @@ export interface TransformedMenuItem {
   price: string;
   image: string | null;
   popular: boolean;
+  isPopular?: boolean;
+  isActive?: boolean;
+  categoryId?: string;
+  eightySixed?: boolean;
+  channelVisibility?: { pos?: boolean; kiosk?: boolean; online?: boolean };
+  soldByWeight?: boolean;
+  weightUnit?: WeightUnit;
+  imageUrl?: string;
+  thumbnailUrl?: string;
   dietary: string[];
   prepTimeMinutes: number | null;
   menuType: string;
@@ -167,12 +178,50 @@ export interface RestaurantTable {
   updatedAt: string;
 }
 
+// ─── Weight ─────────────────────────────────────────────────────────────────
+
+export type WeightUnit = 'lb' | 'oz' | 'kg' | 'g';
+
+export const WEIGHT_UNIT_LABELS: Record<WeightUnit, string> = {
+  lb: 'lb',
+  oz: 'oz',
+  kg: 'kg',
+  g: 'g',
+};
+
 // ─── Orders ──────────────────────────────────────────────────────────────────
 
 export type OrderStatus = 'pending' | 'confirmed' | 'preparing' | 'ready' | 'completed' | 'cancelled';
 export type OrderType = 'dine_in' | 'pickup' | 'delivery' | 'curbside' | 'catering';
-export type OrderSource = 'online' | 'pos' | 'kiosk' | 'marketplace';
+export type OrderSource = 'online' | 'pos' | 'kiosk' | 'marketplace' | 'quick-service';
 export type FulfillmentStatus = 'NEW' | 'HOLD' | 'SENT' | 'ON_THE_FLY';
+
+export type PrintStatus = 'none' | 'printing' | 'printed' | 'failed';
+export type DispatchState = 'idle' | 'quoting' | 'dispatching' | 'dispatched' | 'failed';
+export type OrderThrottleState = 'NONE' | 'HELD' | 'RELEASED';
+export type CourseFireStatus = 'PENDING' | 'FIRED' | 'READY';
+export type CoursePacingMode = 'disabled' | 'server_fires' | 'auto_fire_timed';
+
+export interface OrderThrottlingStatus {
+  enabled: boolean;
+  triggering: boolean;
+  triggerReason?: string;
+  activeOrders: number;
+  overdueOrders: number;
+  heldOrders: number;
+  thresholds: {
+    maxActiveOrders: number;
+    maxOverdueOrders: number;
+  };
+}
+
+export type GuestOrderStatus =
+  | 'RECEIVED'
+  | 'IN_PREPARATION'
+  | 'READY_FOR_PICKUP'
+  | 'CLOSED'
+  | 'CANCELLED'
+  | 'VOIDED';
 
 export interface OrderItemModifier {
   id: string;
@@ -316,6 +365,7 @@ export interface Order {
   createdAt: string;
   updatedAt: string;
   throttle: OrderThrottle;
+  printStatus?: PrintStatus;
   orderItems: OrderItem[];
   checks?: Check[];
   customer: Customer | null;
@@ -351,15 +401,79 @@ export interface CreateOrderRequest {
   };
 }
 
+// ─── Discount / Void ────────────────────────────────────────────────────────
+
+export interface DiscountResult {
+  type: 'percentage' | 'flat' | 'comp';
+  value: number;
+  reason: string;
+}
+
+export interface VoidResult {
+  reason: string;
+  managerPin?: string;
+}
+
 // ─── Socket Events ───────────────────────────────────────────────────────────
 
 export interface SocketJoinPayload {
   restaurantId: string;
   deviceId: string;
-  deviceType: 'pos' | 'kds' | 'sos';
+  deviceType: 'pos' | 'kds' | 'sos' | 'bar';
 }
 
 export interface SocketOrderEvent {
   order: Order;
   timestamp: string;
+}
+
+// ─── Cash Drawer ────────────────────────────────────────────────────────────
+
+export interface CashDenomination {
+  hundreds: number;
+  fifties: number;
+  twenties: number;
+  tens: number;
+  fives: number;
+  ones: number;
+  quarters: number;
+  dimes: number;
+  nickels: number;
+  pennies: number;
+}
+
+export type CashEventType =
+  | 'cash_sale'
+  | 'cash_in'
+  | 'cash_out'
+  | 'paid_out'
+  | 'tip_payout'
+  | 'drop_to_safe'
+  | 'petty_cash'
+  | 'bank_deposit'
+  | 'refund';
+
+export interface CashEvent {
+  id: string;
+  type: CashEventType;
+  amount: number;
+  reason: string;
+  timestamp: string;
+  employeeId?: string;
+  employeeName?: string;
+}
+
+export interface CashDrawerSession {
+  id: string;
+  isOpen: boolean;
+  openedAt: string;
+  closedAt?: string;
+  openingFloat: number;
+  closingDenomination?: CashDenomination;
+  closingTotal?: number;
+  expectedBalance?: number;
+  variance?: number;
+  events: CashEvent[];
+  openedBy?: string;
+  closedBy?: string;
 }
