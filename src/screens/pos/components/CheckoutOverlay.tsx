@@ -148,7 +148,7 @@ export default function CheckoutOverlay({
   // Load tables when needed
   useEffect(() => {
     if (visible && restaurantId) {
-      void getTables(restaurantId).then(setTables).catch(() => {
+      getTables(restaurantId).then(setTables).catch(() => {
         // Tables will be empty if fetch fails
       });
     }
@@ -261,7 +261,7 @@ export default function CheckoutOverlay({
 
   const handlePaymentComplete = useCallback(() => {
     setShowPaymentTerminal(false);
-    void submitOrder();
+    submitOrder();
   }, [submitOrder]);
 
   const handlePaymentFailed = useCallback((error: string) => {
@@ -274,7 +274,7 @@ export default function CheckoutOverlay({
   }, []);
 
   const handleSendToKitchen = useCallback(() => {
-    void submitOrder();
+    submitOrder();
   }, [submitOrder]);
 
   // Success overlay

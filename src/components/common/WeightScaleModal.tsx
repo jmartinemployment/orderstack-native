@@ -25,6 +25,12 @@ const KEYPAD_KEYS = [
   ['.', '0', 'backspace'],
 ];
 
+function getKeyAccessibilityLabel(key: string): string {
+  if (key === 'backspace') { return 'Delete last digit'; }
+  if (key === '.') { return 'Decimal point'; }
+  return `Number ${key}`;
+}
+
 export default function WeightScaleModal({
   visible,
   itemName,
@@ -80,15 +86,15 @@ export default function WeightScaleModal({
 
           {/* Keypad */}
           <View style={styles.keypad}>
-            {KEYPAD_KEYS.map((row, rowIdx) => (
-              <View key={`row-${rowIdx}`} style={styles.keypadRow}>
+            {KEYPAD_KEYS.map((row) => (
+              <View key={row.join('-')} style={styles.keypadRow}>
                 {row.map((key) => (
                   <TouchableOpacity
                     key={key}
                     style={[styles.keypadBtn, key === 'backspace' && styles.keypadBtnAccent]}
                     onPress={() => handlePress(key)}
                     accessibilityRole="button"
-                    accessibilityLabel={key === 'backspace' ? 'Delete last digit' : key === '.' ? 'Decimal point' : `Number ${key}`}
+                    accessibilityLabel={getKeyAccessibilityLabel(key)}
                   >
                     <Text style={[styles.keypadBtnText, key === 'backspace' && styles.keypadBtnAccentText]}>
                       {key === 'backspace' ? '\u232B' : key}

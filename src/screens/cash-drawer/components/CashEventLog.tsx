@@ -21,6 +21,34 @@ const EVENT_CONFIG: Record<CashEventType, { label: string; color: 'success' | 'e
 
 const INFLOW_TYPES: ReadonlySet<CashEventType> = new Set(['cash_sale', 'cash_in']);
 
+function renderEvent(
+  { item }: { item: CashEvent },
+  styles: ReturnType<typeof createStyles>,
+  colors: ReturnType<typeof useTheme>['colors'],
+): React.JSX.Element {
+  const config = EVENT_CONFIG[item.type];
+  const badgeColor = colors[config.color];
+  const isInflow = INFLOW_TYPES.has(item.type);
+  const amountPrefix = isInflow ? '+' : '-';
+  const amountColor = isInflow ? colors.success : colors.error;
+  const time = new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  return (
+    <View style={styles.eventRow}>
+      <View style={[styles.badge, { backgroundColor: badgeColor }]}>
+        <Text style={styles.badgeText}>{config.label}</Text>
+      </View>
+      <View style={styles.eventInfo}>
+        <Text style={styles.eventReason} numberOfLines={1}>{item.reason}</Text>
+        <Text style={styles.eventTime}>{time}</Text>
+      </View>
+      <Text style={[styles.eventAmount, { color: amountColor }]}>
+        {amountPrefix}${item.amount.toFixed(2)}
+      </Text>
+    </View>
+  );
+}
+
 export default function CashEventLog({ events }: Props): React.JSX.Element {
   const { colors, spacing, typography } = useTheme();
   const styles = createStyles(colors, spacing, typography);
@@ -38,35 +66,11 @@ export default function CashEventLog({ events }: Props): React.JSX.Element {
     );
   }
 
-  const renderEvent = ({ item }: { item: CashEvent }) => {
-    const config = EVENT_CONFIG[item.type];
-    const badgeColor = colors[config.color];
-    const isInflow = INFLOW_TYPES.has(item.type);
-    const amountPrefix = isInflow ? '+' : '-';
-    const amountColor = isInflow ? colors.success : colors.error;
-    const time = new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-    return (
-      <View style={styles.eventRow}>
-        <View style={[styles.badge, { backgroundColor: badgeColor }]}>
-          <Text style={styles.badgeText}>{config.label}</Text>
-        </View>
-        <View style={styles.eventInfo}>
-          <Text style={styles.eventReason} numberOfLines={1}>{item.reason}</Text>
-          <Text style={styles.eventTime}>{time}</Text>
-        </View>
-        <Text style={[styles.eventAmount, { color: amountColor }]}>
-          {amountPrefix}${item.amount.toFixed(2)}
-        </Text>
-      </View>
-    );
-  };
-
   return (
     <FlatList
       data={sortedEvents}
       keyExtractor={(item) => item.id}
-      renderItem={renderEvent}
+      renderItem={(info) => renderEvent(info, styles, colors)}
       style={styles.list}
       contentContainerStyle={styles.listContent}
     />

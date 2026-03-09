@@ -109,7 +109,7 @@ export default function DiscountModal({
             {/* Type selector */}
             <View style={styles.typeRow}>
               {(['percentage', 'flat', 'comp'] as const).map((type) => {
-                const label = type === 'percentage' ? 'Percentage' : type === 'flat' ? 'Flat Amount' : 'Full Comp';
+                const label = getDiscountTypeLabel(type);
                 const isActive = discountType === type;
                 return (
                   <TouchableOpacity
@@ -233,6 +233,16 @@ export default function DiscountModal({
       </View>
     </Modal>
   );
+}
+
+const DISCOUNT_TYPE_LABELS: Record<string, string> = {
+  percentage: 'Percentage',
+  flat: 'Flat Amount',
+  comp: 'Full Comp',
+};
+
+function getDiscountTypeLabel(type: string): string {
+  return DISCOUNT_TYPE_LABELS[type] ?? type;
 }
 
 function createStyles(

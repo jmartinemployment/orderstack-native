@@ -119,7 +119,7 @@ export default function BarTerminalScreen(
   const [isLoadingMenu, setIsLoadingMenu] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
-  const [deviceId, setDeviceIdState] = useState<string | null>(null);
+  const [deviceId, setDeviceId] = useState<string | null>(null);
   const [modifierItem, setModifierItem] = useState<TransformedMenuItem | null>(null);
 
   // Track previous new order count for vibration alert
@@ -238,7 +238,7 @@ export default function BarTerminalScreen(
         ]);
 
         setMenu(menuData);
-        setDeviceIdState(devId);
+        setDeviceId(devId);
 
         // Apply settings to store
         setBarSettings({

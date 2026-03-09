@@ -53,8 +53,16 @@ export default function KioskCart({ onCheckout, isSubmitting }: Props): React.JS
             colors={colors}
             spacing={spacing}
             typography={typography}
-            onIncrement={() => item.soldByWeight ? undefined : updateQuantity(item.id, item.quantity + 1)}
-            onDecrement={() => item.soldByWeight ? removeItem(item.id) : (item.quantity <= 1 ? removeItem(item.id) : updateQuantity(item.id, item.quantity - 1))}
+            onIncrement={() => {
+              if (!item.soldByWeight) { updateQuantity(item.id, item.quantity + 1); }
+            }}
+            onDecrement={() => {
+              if (item.soldByWeight || item.quantity <= 1) {
+                removeItem(item.id);
+              } else {
+                updateQuantity(item.id, item.quantity - 1);
+              }
+            }}
           />
         )}
       />

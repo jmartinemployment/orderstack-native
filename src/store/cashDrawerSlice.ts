@@ -62,7 +62,7 @@ export const createCashDrawerSlice: StateCreator<CashDrawerSlice> = (set, get) =
       denomination.fives * 5 +
       denomination.ones * 1 +
       denomination.quarters * 0.25 +
-      denomination.dimes * 0.10 +
+      denomination.dimes * 0.1 +
       denomination.nickels * 0.05 +
       denomination.pennies * 0.01;
 

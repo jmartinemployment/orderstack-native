@@ -22,23 +22,31 @@ const DENOMINATION_ROWS: DenomRow[] = [
   { key: 'fives', label: '$5 Bills', value: 5 },
   { key: 'ones', label: '$1 Bills', value: 1 },
   { key: 'quarters', label: 'Quarters', value: 0.25 },
-  { key: 'dimes', label: 'Dimes', value: 0.10 },
+  { key: 'dimes', label: 'Dimes', value: 0.1 },
   { key: 'nickels', label: 'Nickels', value: 0.05 },
   { key: 'pennies', label: 'Pennies', value: 0.01 },
 ];
 
+function incrementDenomination(
+  denomination: CashDenomination,
+  key: keyof CashDenomination,
+  onChange: (d: CashDenomination) => void,
+): void {
+  onChange({ ...denomination, [key]: denomination[key] + 1 });
+}
+
+function decrementDenomination(
+  denomination: CashDenomination,
+  key: keyof CashDenomination,
+  onChange: (d: CashDenomination) => void,
+): void {
+  if (denomination[key] <= 0) { return; }
+  onChange({ ...denomination, [key]: denomination[key] - 1 });
+}
+
 export default function DenominationCounter({ denomination, onChange }: Props): React.JSX.Element {
   const { colors, spacing, typography } = useTheme();
   const styles = createStyles(colors, spacing, typography);
-
-  const handleIncrement = (key: keyof CashDenomination) => {
-    onChange({ ...denomination, [key]: denomination[key] + 1 });
-  };
-
-  const handleDecrement = (key: keyof CashDenomination) => {
-    if (denomination[key] <= 0) { return; }
-    onChange({ ...denomination, [key]: denomination[key] - 1 });
-  };
 
   const grandTotal = DENOMINATION_ROWS.reduce(
     (sum, row) => sum + denomination[row.key] * row.value,
@@ -55,7 +63,7 @@ export default function DenominationCounter({ denomination, onChange }: Props): 
             <View style={styles.stepper}>
               <TouchableOpacity
                 style={[styles.stepBtn, denomination[row.key] === 0 && styles.stepBtnDisabled]}
-                onPress={() => handleDecrement(row.key)}
+                onPress={() => decrementDenomination(denomination, row.key, onChange)}
                 disabled={denomination[row.key] === 0}
                 accessibilityRole="button"
                 accessibilityLabel={`Decrease ${row.label}`}
@@ -65,7 +73,7 @@ export default function DenominationCounter({ denomination, onChange }: Props): 
               <Text style={styles.count}>{denomination[row.key]}</Text>
               <TouchableOpacity
                 style={styles.stepBtn}
-                onPress={() => handleIncrement(row.key)}
+                onPress={() => incrementDenomination(denomination, row.key, onChange)}
                 accessibilityRole="button"
                 accessibilityLabel={`Increase ${row.label}`}
               >

@@ -65,6 +65,231 @@ function formatThrottleElapsed(heldAt?: string): string {
   return `${hours}h ${minutes}m held`;
 }
 
+function getProgressColor(prepProgress: number): string {
+  if (prepProgress >= 1) { return '#DC2626'; }
+  if (prepProgress >= 0.8) { return '#D97706'; }
+  return '#059669';
+}
+
+function getPrepTimeText(prepRemainingMinutes: number): string {
+  if (prepRemainingMinutes > 0) {
+    return `~${prepRemainingMinutes} min left`;
+  }
+  return `${Math.abs(prepRemainingMinutes)} min overdue`;
+}
+
+function getCustomerName(order: Order): string | null {
+  if (!order.customer) { return null; }
+  return [order.customer.firstName, order.customer.lastName].filter(Boolean).join(' ') || null;
+}
+
+// --- Sub-components to reduce cognitive complexity ---
+
+type ThrottleBadgeProps = Readonly<{
+  order: Order;
+  shortOrderNumber: string;
+  onReleaseThrottle?: (orderId: string) => void;
+  styles: ReturnType<typeof createStyles>;
+}>;
+
+function ThrottleBadge({ order, shortOrderNumber, onReleaseThrottle, styles }: ThrottleBadgeProps): React.JSX.Element {
+  return (
+    <View style={styles.throttleBadge}>
+      <View style={styles.throttleBadgeContent}>
+        <Text style={styles.throttleBadgeText}>
+          HELD{order.throttle?.reason ? ` - ${order.throttle.reason}` : ''}
+        </Text>
+        <Text style={styles.throttleElapsedText}>
+          {formatThrottleElapsed(order.throttle?.heldAt)}
+        </Text>
+      </View>
+      {onReleaseThrottle ? (
+        <TouchableOpacity
+          style={styles.throttleReleaseButton}
+          onPress={() => onReleaseThrottle(order.id)}
+          accessibilityRole="button"
+          accessibilityLabel={`Release throttle on order ${shortOrderNumber}`}
+        >
+          <Text style={styles.throttleReleaseText}>Release</Text>
+        </TouchableOpacity>
+      ) : null}
+    </View>
+  );
+}
+
+type PrintStatusBadgeProps = Readonly<{
+  printStatus: PrintStatus;
+  orderId: string;
+  shortOrderNumber: string;
+  onRetryPrint?: (orderId: string) => void;
+  styles: ReturnType<typeof createStyles>;
+  infoColor: string;
+}>;
+
+function PrintStatusBadge({ printStatus, orderId, shortOrderNumber, onRetryPrint, styles, infoColor }: PrintStatusBadgeProps): React.JSX.Element {
+  return (
+    <View style={styles.printStatusRow}>
+      {printStatus === 'printing' ? (
+        <View style={styles.printBadge}>
+          <ActivityIndicator size="small" color={infoColor} />
+          <Text style={styles.printBadgeText}>Printing...</Text>
+        </View>
+      ) : null}
+      {printStatus === 'printed' ? (
+        <View style={[styles.printBadge, styles.printBadgeSuccess]}>
+          <Text style={styles.printBadgeSuccessText}>Printed</Text>
+        </View>
+      ) : null}
+      {printStatus === 'failed' ? (
+        <View style={styles.printFailedRow}>
+          <View style={[styles.printBadge, styles.printBadgeFailed]}>
+            <Text style={styles.printBadgeFailedText}>Print Failed</Text>
+          </View>
+          {onRetryPrint ? (
+            <TouchableOpacity
+              style={styles.retryPrintButton}
+              onPress={() => onRetryPrint(orderId)}
+              accessibilityRole="button"
+              accessibilityLabel={`Retry print for order ${shortOrderNumber}`}
+            >
+              <Text style={styles.retryPrintText}>Retry</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+type OrderItemRowProps = Readonly<{
+  item: Order['orderItems'][number];
+  isDimmed: boolean;
+  isRemakeConfirm: boolean;
+  onLongPress: () => void;
+  styles: ReturnType<typeof createStyles>;
+}>;
+
+function OrderItemRow({ item, isDimmed, isRemakeConfirm, onLongPress, styles }: OrderItemRowProps): React.JSX.Element {
+  return (
+    <TouchableOpacity
+      style={[
+        styles.itemRow,
+        isRemakeConfirm && styles.itemRowRemakeConfirm,
+        isDimmed && styles.itemRowDimmed,
+      ]}
+      onLongPress={onLongPress}
+      activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={`${item.quantity}x ${item.menuItemName}. Long press to remake.`}
+    >
+      <Text style={[styles.itemQty, isDimmed && styles.textDimmed]}>{item.quantity}x</Text>
+      <View style={styles.itemDetails}>
+        <View style={styles.itemNameRow}>
+          <Text style={[styles.itemName, isDimmed && styles.textDimmed]}>{item.menuItemName}</Text>
+          {item.status === 'remade' ? (
+            <View style={styles.remadeBadge}>
+              <Text style={styles.remadeBadgeText}>Remade</Text>
+            </View>
+          ) : null}
+        </View>
+        {item.modifiers.length > 0 ? (
+          <Text style={[styles.itemMods, isDimmed && styles.textDimmed]}>
+            {item.modifiers.map((m) => m.modifierName).join(', ')}
+          </Text>
+        ) : null}
+        {item.specialInstructions ? (
+          <Text style={[styles.itemNotes, isDimmed && styles.textDimmed]}>{item.specialInstructions}</Text>
+        ) : null}
+        {isRemakeConfirm ? (
+          <Text style={styles.remakeConfirmText}>Long-press again to confirm remake</Text>
+        ) : null}
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+type OrderCardActionButtonsProps = Readonly<{
+  column: ColumnType;
+  order: Order;
+  shortOrderNumber: string;
+  isThrottled: boolean;
+  showCollectPayment: boolean;
+  onRecall?: (orderId: string) => void;
+  onHoldOrder?: (orderId: string) => void;
+  onCollectPayment: () => void;
+  onBump: (orderId: string, nextStatus: OrderStatus) => void;
+  config: { nextStatus: OrderStatus; buttonLabel: string };
+  styles: ReturnType<typeof createStyles>;
+}>;
+
+function OrderCardActionButtons({
+  column,
+  order,
+  shortOrderNumber,
+  isThrottled,
+  showCollectPayment,
+  onRecall,
+  onHoldOrder,
+  onCollectPayment,
+  onBump,
+  config,
+  styles,
+}: OrderCardActionButtonsProps): React.JSX.Element {
+  return (
+    <>
+      {(column === 'preparing' || column === 'ready') && onRecall ? (
+        <TouchableOpacity
+          style={styles.recallButton}
+          onPress={() => onRecall(order.id)}
+          accessibilityRole="button"
+          accessibilityLabel={`Recall order ${shortOrderNumber}`}
+        >
+          <Text style={styles.recallText}>Recall</Text>
+        </TouchableOpacity>
+      ) : null}
+
+      {column === 'new' && !isThrottled && onHoldOrder ? (
+        <TouchableOpacity
+          style={styles.holdButton}
+          onPress={() => onHoldOrder(order.id)}
+          accessibilityRole="button"
+          accessibilityLabel={`Hold order ${shortOrderNumber}`}
+        >
+          <Text style={styles.holdButtonText}>Hold</Text>
+        </TouchableOpacity>
+      ) : null}
+
+      {column === 'ready' && showCollectPayment ? (
+        <TouchableOpacity
+          style={styles.collectPaymentButton}
+          onPress={onCollectPayment}
+          accessibilityRole="button"
+          accessibilityLabel={`Collect payment for order ${shortOrderNumber}`}
+        >
+          <Text style={styles.collectPaymentText}>Collect Payment</Text>
+        </TouchableOpacity>
+      ) : null}
+
+      <TouchableOpacity
+        style={[
+          styles.bumpButton,
+          column === 'new' && styles.bumpButtonNew,
+          column === 'preparing' && styles.bumpButtonPreparing,
+          column === 'ready' && styles.bumpButtonReady,
+          column === 'throttled' && styles.bumpButtonThrottled,
+        ]}
+        onPress={() => onBump(order.id, config.nextStatus)}
+        accessibilityRole="button"
+        accessibilityLabel={`${config.buttonLabel} order ${shortOrderNumber}`}
+      >
+        <Text style={styles.bumpText}>{config.buttonLabel}</Text>
+      </TouchableOpacity>
+    </>
+  );
+}
+
+// --- Main component ---
+
 export default function OrderCard({
   order,
   column,
@@ -137,16 +362,16 @@ export default function OrderCard({
   const orderTypeLabel = order.orderType.replaceAll('_', ' ');
   const shortOrderNumber = order.orderNumber.split('-').at(-1) ?? order.orderNumber;
 
-  const customerName = order.customer
-    ? [order.customer.firstName, order.customer.lastName].filter(Boolean).join(' ')
-    : null;
+  const customerName = getCustomerName(order);
 
   // Prep time progress calculation
   const prepTime = estimatedPrepMinutes ?? order.orderItems.length * 3;
   const prepProgress = prepTime > 0 ? elapsedMinutes / prepTime : 0;
   const prepRemainingMinutes = prepTime - elapsedMinutes;
 
-  const handleCollectPayment = () => {
+  const isThrottled = order.throttle?.state === 'HELD';
+
+  const handleCollectPayment = useCallback(() => {
     if (onCollectPayment) {
       onCollectPayment(order);
     } else {
@@ -156,7 +381,7 @@ export default function OrderCard({
         [{ text: 'OK' }],
       );
     }
-  };
+  }, [onCollectPayment, order, shortOrderNumber]);
 
   const handleHeaderLongPress = useCallback(() => {
     if (onRushToggle) {
@@ -187,23 +412,6 @@ export default function OrderCard({
       }, 3000);
     }
   }, [onRemakeItem, order.id, remakeConfirmItemId]);
-
-  const isThrottled = order.throttle?.state === 'HELD';
-
-  // Prep progress bar color
-  const getProgressColor = (): string => {
-    if (prepProgress >= 1) { return '#DC2626'; }
-    if (prepProgress >= 0.8) { return '#D97706'; }
-    return '#059669';
-  };
-
-  // Prep remaining text
-  const getPrepTimeText = (): string => {
-    if (prepRemainingMinutes > 0) {
-      return `~${prepRemainingMinutes} min left`;
-    }
-    return `${Math.abs(prepRemainingMinutes)} min overdue`;
-  };
 
   return (
     <View style={[styles.card, isUrgent && styles.cardUrgent, isWarning && styles.cardWarning]}>
@@ -255,36 +463,22 @@ export default function OrderCard({
               styles.progressBarFill,
               {
                 width: `${Math.min(prepProgress * 100, 100)}%`,
-                backgroundColor: getProgressColor(),
+                backgroundColor: getProgressColor(prepProgress),
               },
             ]}
           />
-          <Text style={styles.progressBarText}>{getPrepTimeText()}</Text>
+          <Text style={styles.progressBarText}>{getPrepTimeText(prepRemainingMinutes)}</Text>
         </View>
       ) : null}
 
       {/* Throttle hold badge */}
       {isThrottled ? (
-        <View style={styles.throttleBadge}>
-          <View style={styles.throttleBadgeContent}>
-            <Text style={styles.throttleBadgeText}>
-              HELD{order.throttle?.reason ? ` - ${order.throttle.reason}` : ''}
-            </Text>
-            <Text style={styles.throttleElapsedText}>
-              {formatThrottleElapsed(order.throttle?.heldAt)}
-            </Text>
-          </View>
-          {onReleaseThrottle ? (
-            <TouchableOpacity
-              style={styles.throttleReleaseButton}
-              onPress={() => onReleaseThrottle(order.id)}
-              accessibilityRole="button"
-              accessibilityLabel={`Release throttle on order ${shortOrderNumber}`}
-            >
-              <Text style={styles.throttleReleaseText}>Release</Text>
-            </TouchableOpacity>
-          ) : null}
-        </View>
+        <ThrottleBadge
+          order={order}
+          shortOrderNumber={shortOrderNumber}
+          onReleaseThrottle={onReleaseThrottle}
+          styles={styles}
+        />
       ) : null}
 
       {/* Customer / Table info */}
@@ -306,80 +500,28 @@ export default function OrderCard({
 
       {/* Print status badge (READY column) */}
       {column === 'ready' && printStatus && printStatus !== 'none' ? (
-        <View style={styles.printStatusRow}>
-          {printStatus === 'printing' ? (
-            <View style={styles.printBadge}>
-              <ActivityIndicator size="small" color={colors.info} />
-              <Text style={styles.printBadgeText}>Printing...</Text>
-            </View>
-          ) : null}
-          {printStatus === 'printed' ? (
-            <View style={[styles.printBadge, styles.printBadgeSuccess]}>
-              <Text style={styles.printBadgeSuccessText}>Printed</Text>
-            </View>
-          ) : null}
-          {printStatus === 'failed' ? (
-            <View style={styles.printFailedRow}>
-              <View style={[styles.printBadge, styles.printBadgeFailed]}>
-                <Text style={styles.printBadgeFailedText}>Print Failed</Text>
-              </View>
-              {onRetryPrint ? (
-                <TouchableOpacity
-                  style={styles.retryPrintButton}
-                  onPress={() => onRetryPrint(order.id)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Retry print for order ${shortOrderNumber}`}
-                >
-                  <Text style={styles.retryPrintText}>Retry</Text>
-                </TouchableOpacity>
-              ) : null}
-            </View>
-          ) : null}
-        </View>
+        <PrintStatusBadge
+          printStatus={printStatus}
+          orderId={order.id}
+          shortOrderNumber={shortOrderNumber}
+          onRetryPrint={onRetryPrint}
+          styles={styles}
+          infoColor={colors.info}
+        />
       ) : null}
 
       {/* Items */}
       <View style={styles.itemsContainer}>
-        {order.orderItems.map((item) => {
-          const isDimmed = hasStationFilter && !matchingItemIds.has(item.id);
-          return (
-            <TouchableOpacity
-              key={item.id}
-              style={[
-                styles.itemRow,
-                remakeConfirmItemId === item.id && styles.itemRowRemakeConfirm,
-                isDimmed && styles.itemRowDimmed,
-              ]}
-              onLongPress={() => handleItemLongPress(item.id)}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel={`${item.quantity}x ${item.menuItemName}. Long press to remake.`}
-            >
-              <Text style={[styles.itemQty, isDimmed && styles.textDimmed]}>{item.quantity}x</Text>
-              <View style={styles.itemDetails}>
-                <View style={styles.itemNameRow}>
-                  <Text style={[styles.itemName, isDimmed && styles.textDimmed]}>{item.menuItemName}</Text>
-                  {item.status === 'remade' ? (
-                    <View style={styles.remadeBadge}>
-                      <Text style={styles.remadeBadgeText}>Remade</Text>
-                    </View>
-                  ) : null}
-                </View>
-                {item.modifiers.length > 0 ? (
-                  <Text style={[styles.itemMods, isDimmed && styles.textDimmed]}>
-                    {item.modifiers.map((m) => m.modifierName).join(', ')}
-                  </Text>
-                ) : null}
-                {item.specialInstructions ? (
-                  <Text style={[styles.itemNotes, isDimmed && styles.textDimmed]}>{item.specialInstructions}</Text>
-                ) : null}
-                {remakeConfirmItemId === item.id ? (
-                  <Text style={styles.remakeConfirmText}>Long-press again to confirm remake</Text>
-                ) : null}
-              </View>
-            </TouchableOpacity>
-          );
-        })}
+        {order.orderItems.map((item) => (
+          <OrderItemRow
+            key={item.id}
+            item={item}
+            isDimmed={hasStationFilter && !matchingItemIds.has(item.id)}
+            isRemakeConfirm={remakeConfirmItemId === item.id}
+            onLongPress={() => handleItemLongPress(item.id)}
+            styles={styles}
+          />
+        ))}
       </View>
 
       {/* Order-level special instructions */}
@@ -390,57 +532,20 @@ export default function OrderCard({
         </View>
       ) : null}
 
-      {/* Recall button (PREPARING and READY columns) */}
-      {(column === 'preparing' || column === 'ready') && onRecall ? (
-        <TouchableOpacity
-          style={styles.recallButton}
-          onPress={() => onRecall(order.id)}
-          accessibilityRole="button"
-          accessibilityLabel={`Recall order ${shortOrderNumber}`}
-        >
-          <Text style={styles.recallText}>Recall</Text>
-        </TouchableOpacity>
-      ) : null}
-
-      {/* Hold button (NEW column, when not already throttled) */}
-      {column === 'new' && !isThrottled && onHoldOrder ? (
-        <TouchableOpacity
-          style={styles.holdButton}
-          onPress={() => onHoldOrder(order.id)}
-          accessibilityRole="button"
-          accessibilityLabel={`Hold order ${shortOrderNumber}`}
-        >
-          <Text style={styles.holdButtonText}>Hold</Text>
-        </TouchableOpacity>
-      ) : null}
-
-      {/* Collect Payment button (READY column only) */}
-      {column === 'ready' && showCollectPayment ? (
-        <TouchableOpacity
-          style={styles.collectPaymentButton}
-          onPress={handleCollectPayment}
-          accessibilityRole="button"
-          accessibilityLabel={`Collect payment for order ${shortOrderNumber}`}
-        >
-          <Text style={styles.collectPaymentText}>Collect Payment</Text>
-        </TouchableOpacity>
-      ) : null}
-
-      {/* Bump button */}
-      <TouchableOpacity
-        style={[
-          styles.bumpButton,
-          column === 'new' && styles.bumpButtonNew,
-          column === 'preparing' && styles.bumpButtonPreparing,
-          column === 'ready' && styles.bumpButtonReady,
-          column === 'throttled' && styles.bumpButtonThrottled,
-        ]}
-        onPress={() => onBump(order.id, config.nextStatus)}
-        accessibilityRole="button"
-        accessibilityLabel={`${config.buttonLabel} order ${shortOrderNumber}`}
-      >
-        <Text style={styles.bumpText}>{config.buttonLabel}</Text>
-      </TouchableOpacity>
+      {/* Action buttons */}
+      <OrderCardActionButtons
+        column={column}
+        order={order}
+        shortOrderNumber={shortOrderNumber}
+        isThrottled={isThrottled}
+        showCollectPayment={showCollectPayment}
+        onRecall={onRecall}
+        onHoldOrder={onHoldOrder}
+        onCollectPayment={handleCollectPayment}
+        onBump={onBump}
+        config={config}
+        styles={styles}
+      />
     </View>
   );
 }

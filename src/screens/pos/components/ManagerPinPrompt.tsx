@@ -28,10 +28,10 @@ const MIN_PIN_LENGTH = 4;
 
 export default function ManagerPinPrompt({
   visible,
-  title = 'Manager Authorization',
-  message = 'Enter manager PIN to continue',
   onSubmit,
   onCancel,
+  title = 'Manager Authorization',
+  message = 'Enter manager PIN to continue',
 }: Props): React.JSX.Element {
   const { colors, spacing, typography } = useTheme();
   const styles = createStyles(colors, spacing, typography);
@@ -105,17 +105,13 @@ export default function ManagerPinPrompt({
                     ]}
                     onPress={() => handleKeyPress(key)}
                     accessibilityRole="button"
-                    accessibilityLabel={
-                      key === 'backspace' ? 'Delete last digit'
-                        : key === 'clear' ? 'Clear PIN'
-                          : `Number ${key}`
-                    }
+                    accessibilityLabel={getKeypadAccessibilityLabel(key)}
                   >
                     <Text style={[
                       styles.keypadBtnText,
                       (key === 'clear' || key === 'backspace') && styles.keypadBtnAccentText,
                     ]}>
-                      {key === 'backspace' ? '\u232B' : key === 'clear' ? 'CLR' : key}
+                      {getKeypadDisplayText(key)}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -147,6 +143,18 @@ export default function ManagerPinPrompt({
       </View>
     </Modal>
   );
+}
+
+function getKeypadAccessibilityLabel(key: string): string {
+  if (key === 'backspace') return 'Delete last digit';
+  if (key === 'clear') return 'Clear PIN';
+  return `Number ${key}`;
+}
+
+function getKeypadDisplayText(key: string): string {
+  if (key === 'backspace') return '\u232B';
+  if (key === 'clear') return 'CLR';
+  return key;
 }
 
 function createStyles(

@@ -63,11 +63,7 @@ export default function CartPanel({ onSubmitOrder, onSendToKitchen, onAddDiscoun
     return sum + itemPrice + modPrice;
   }, 0);
 
-  const discountAmount = discountType === 'percentage'
-    ? subtotal * (discountValue / 100)
-    : discountType === 'comp'
-      ? subtotal
-      : (discountType === 'flat' ? discountValue : 0);
+  const discountAmount = computeCartDiscountAmount(discountType, discountValue, subtotal);
 
   const discountedSubtotal = Math.max(0, subtotal - discountAmount);
   const tax = discountedSubtotal * taxRate;
@@ -124,7 +120,7 @@ export default function CartPanel({ onSubmitOrder, onSendToKitchen, onAddDiscoun
       </View>
 
       {/* Customer row */}
-      {hasCustomer && !showCustomerForm ? (
+      {showCustomerForm ? null : hasCustomer ? (
         <TouchableOpacity
           style={styles.customerRow}
           onPress={handleOpenCustomerForm}
@@ -144,7 +140,7 @@ export default function CartPanel({ onSubmitOrder, onSendToKitchen, onAddDiscoun
             <Text style={styles.customerClearText}>{'\u2715'}</Text>
           </TouchableOpacity>
         </TouchableOpacity>
-      ) : !showCustomerForm ? (
+      ) : (
         <TouchableOpacity
           style={styles.customerRow}
           onPress={handleOpenCustomerForm}
@@ -157,7 +153,7 @@ export default function CartPanel({ onSubmitOrder, onSendToKitchen, onAddDiscoun
           <Text style={styles.customerAddText}>Add customer</Text>
           <Text style={styles.customerChevron}>{'\u203A'}</Text>
         </TouchableOpacity>
-      ) : null}
+      )}
 
       {/* Inline customer form */}
       {showCustomerForm && (
@@ -317,7 +313,7 @@ export default function CartPanel({ onSubmitOrder, onSendToKitchen, onAddDiscoun
         accessibilityLabel={checkPresented ? `Close table, total ${total.toFixed(2)} dollars` : `Charge, total ${total.toFixed(2)} dollars`}
       >
         <Text style={styles.submitText}>
-          {isSubmitting ? 'Sending...' : checkPresented ? `Close Table $${total.toFixed(2)}` : `Charge $${total.toFixed(2)}`}
+          {getSubmitButtonText(isSubmitting, checkPresented, total)}
         </Text>
       </TouchableOpacity>
 
@@ -334,6 +330,23 @@ export default function CartPanel({ onSubmitOrder, onSendToKitchen, onAddDiscoun
       </TouchableOpacity>
     </View>
   );
+}
+
+function getSubmitButtonText(isSubmitting: boolean, checkPresented: boolean, total: number): string {
+  if (isSubmitting) return 'Sending...';
+  if (checkPresented) return `Close Table $${total.toFixed(2)}`;
+  return `Charge $${total.toFixed(2)}`;
+}
+
+function computeCartDiscountAmount(
+  discountType: string | null,
+  discountValue: number,
+  subtotal: number,
+): number {
+  if (discountType === 'percentage') return subtotal * (discountValue / 100);
+  if (discountType === 'comp') return subtotal;
+  if (discountType === 'flat') return discountValue;
+  return 0;
 }
 
 type CartLineItemProps = Readonly<{

@@ -45,7 +45,7 @@ export async function getRestaurantSettings(merchantId: string): Promise<Restaur
     barSettings: {
       defaultMode: (barRaw?.defaultMode as BarSettings['defaultMode']) ?? null,
       soundEnabled: Boolean(barRaw?.soundEnabled ?? false),
-      soundName: String(barRaw?.soundName ?? 'chime'),
+      soundName: typeof barRaw?.soundName === 'string' ? barRaw.soundName : 'chime',
       beverageCategoryIds: Array.isArray(barRaw?.beverageCategoryIds) ? barRaw.beverageCategoryIds as string[] : [],
     },
   };
