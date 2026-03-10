@@ -71,7 +71,7 @@ export default function CheckoutOverlay({
   const [currentStep, setCurrentStep] = useState<CheckoutStep>('dining');
   const [selectedOrderType, setSelectedOrderType] = useState<string>(initialOrderType);
   const [selectedTableId, setSelectedTableId] = useState<string | undefined>(initialTableId);
-  const [, setSelectedTableNumber] = useState<string | undefined>(undefined);
+
   const [custName, setCustName] = useState(initialCustomerName ?? '');
   const [custPhone, setCustPhone] = useState(initialCustomerPhone ?? '');
   const [custEmail, setCustEmail] = useState(initialCustomerEmail ?? '');
@@ -182,7 +182,6 @@ export default function CheckoutOverlay({
 
   const handleTableSelect = useCallback((table: RestaurantTable) => {
     setSelectedTableId(table.id);
-    setSelectedTableNumber(table.tableNumber);
     goNext();
   }, [goNext]);
 

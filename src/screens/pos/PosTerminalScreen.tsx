@@ -64,7 +64,7 @@ export default function PosTerminalScreen(_props: Readonly<PosTerminalScreenProp
   const cartItems = useAppStore((s) => s.items);
   const addItem = useAppStore((s) => s.addItem);
   const removeItem = useAppStore((s) => s.removeItem);
-  const clearCart = useAppStore((s) => s.clearCart);
+
   const setOrderType = useAppStore((s) => s.setOrderType);
   const setTable = useAppStore((s) => s.setTable);
   const setOrders = useAppStore((s) => s.setOrders);
@@ -79,8 +79,6 @@ export default function PosTerminalScreen(_props: Readonly<PosTerminalScreenProp
   const [tables, setTables] = useState<RestaurantTable[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [isLoadingMenu, setIsLoadingMenu] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [deviceId, setDeviceId] = useState<string | null>(null);
 
   // Top navigation tab state
   const [activeTopTab, setActiveTopTab] = useState('favorites');
@@ -154,7 +152,7 @@ export default function PosTerminalScreen(_props: Readonly<PosTerminalScreenProp
         ]);
         setMenu(menuData);
         setTables(tableData);
-        setDeviceId(devId);
+
         if (menuData.length > 0) {
           setSelectedCategoryId(menuData[0].id);
         }
@@ -393,7 +391,7 @@ export default function PosTerminalScreen(_props: Readonly<PosTerminalScreenProp
             onAddDiscount={handleAddDiscount}
             onVoidItem={handleVoidItem}
             onPresentCheck={() => { handlePresentCheck(); }}
-            isSubmitting={isSubmitting}
+            isSubmitting={false}
           />
         </View>
       </View>
