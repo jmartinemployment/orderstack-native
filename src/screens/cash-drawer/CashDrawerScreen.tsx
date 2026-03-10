@@ -328,20 +328,38 @@ interface KeypadGridStyles {
   keyBackspaceText: object;
 }
 
+function buildKeyHandler(
+  key: string,
+  setInput: React.Dispatch<React.SetStateAction<string>>,
+): () => void {
+  return () => setInput((prev) => handleKeypadPress(prev, key));
+}
+
+function renderKeypadRow(
+  row: string[],
+  rowKey: string,
+  setInput: React.Dispatch<React.SetStateAction<string>>,
+  gridStyles: KeypadGridStyles,
+): React.JSX.Element {
+  return (
+    <View key={rowKey} style={gridStyles.row}>
+      {row.map((key) => renderKeypadKey(
+        key,
+        buildKeyHandler(key, setInput),
+        gridStyles.key, gridStyles.keyText, gridStyles.keyBackspace, gridStyles.keyBackspaceText,
+      ))}
+    </View>
+  );
+}
+
 function renderKeypadGrid(
   setInput: React.Dispatch<React.SetStateAction<string>>,
   gridStyles: KeypadGridStyles,
 ): React.JSX.Element {
   return (
     <View style={gridStyles.container}>
-      {KEYPAD_ROWS.map((row, rowIdx) => (
-        <View key={KEYPAD_ROW_KEYS[rowIdx]} style={gridStyles.row}>
-          {row.map((key) => renderKeypadKey(
-            key,
-            () => setInput((prev) => handleKeypadPress(prev, key)),
-            gridStyles.key, gridStyles.keyText, gridStyles.keyBackspace, gridStyles.keyBackspaceText,
-          ))}
-        </View>
+      {KEYPAD_ROWS.map((row, rowIdx) => renderKeypadRow(
+        row, KEYPAD_ROW_KEYS[rowIdx], setInput, gridStyles,
       ))}
     </View>
   );
