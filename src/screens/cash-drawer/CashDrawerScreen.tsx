@@ -319,6 +319,34 @@ function renderKeypadKey(
   );
 }
 
+interface KeypadGridStyles {
+  container: object;
+  row: object;
+  key: object;
+  keyText: object;
+  keyBackspace: object;
+  keyBackspaceText: object;
+}
+
+function renderKeypadGrid(
+  setInput: React.Dispatch<React.SetStateAction<string>>,
+  gridStyles: KeypadGridStyles,
+): React.JSX.Element {
+  return (
+    <View style={gridStyles.container}>
+      {KEYPAD_ROWS.map((row, rowIdx) => (
+        <View key={KEYPAD_ROW_KEYS[rowIdx]} style={gridStyles.row}>
+          {row.map((key) => renderKeypadKey(
+            key,
+            () => setInput((prev) => handleKeypadPress(prev, key)),
+            gridStyles.key, gridStyles.keyText, gridStyles.keyBackspace, gridStyles.keyBackspaceText,
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+}
+
 function renderOpenDrawerView(
   floatInput: string,
   setFloatInput: React.Dispatch<React.SetStateAction<string>>,
@@ -354,17 +382,11 @@ function renderOpenDrawerView(
         </TouchableOpacity>
 
         {/* Keypad */}
-        <View style={styles.keypad}>
-          {KEYPAD_ROWS.map((row, rowIdx) => (
-            <View key={KEYPAD_ROW_KEYS[rowIdx]} style={styles.keypadRow}>
-              {row.map((key) => renderKeypadKey(
-                key,
-                () => setFloatInput((prev) => handleKeypadPress(prev, key)),
-                styles.key, styles.keyText, styles.keyBackspace, styles.keyBackspaceText,
-              ))}
-            </View>
-          ))}
-        </View>
+        {renderKeypadGrid(setFloatInput, {
+          container: styles.keypad, row: styles.keypadRow,
+          key: styles.key, keyText: styles.keyText,
+          keyBackspace: styles.keyBackspace, keyBackspaceText: styles.keyBackspaceText,
+        })}
       </View>
 
       <View style={styles.footer}>
@@ -525,17 +547,11 @@ function renderAddEventView(opts: AddEventViewOptions): React.JSX.Element {
         </TouchableOpacity>
 
         {/* Keypad */}
-        <View style={styles.keypadSmall}>
-          {KEYPAD_ROWS.map((row, rowIdx) => (
-            <View key={KEYPAD_ROW_KEYS[rowIdx]} style={styles.keypadRow}>
-              {row.map((key) => renderKeypadKey(
-                key,
-                () => setEventAmountInput((prev) => handleKeypadPress(prev, key)),
-                styles.keySmall, styles.keyTextSmall, styles.keyBackspace, styles.keyBackspaceText,
-              ))}
-            </View>
-          ))}
-        </View>
+        {renderKeypadGrid(setEventAmountInput, {
+          container: styles.keypadSmall, row: styles.keypadRow,
+          key: styles.keySmall, keyText: styles.keyTextSmall,
+          keyBackspace: styles.keyBackspace, keyBackspaceText: styles.keyBackspaceText,
+        })}
 
         {/* Reason */}
         <Text style={styles.fieldLabel}>Reason</Text>
