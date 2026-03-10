@@ -3,9 +3,7 @@ import {
   View,
   Text,
   TouchableOpacity,
-  FlatList,
   StyleSheet,
-  ActivityIndicator,
   Alert,
   Vibration,
 } from 'react-native';
@@ -26,21 +24,16 @@ import { getOrders, createOrder, updateOrderStatus } from '@api/orders';
 import { getRestaurantSettings } from '@api/settings';
 import { getStations, getCategoryStationMappings } from '@api/stations';
 import { getDeviceId } from '@services/deviceService';
-import {
-  connectSocket,
-  joinRestaurant,
-  onNewOrder,
-  onOrderUpdated,
-  disconnectSocket,
-  getSocket,
-} from '@services/socketService';
+import { useSocketConnection, connectAndJoin } from '@hooks/useSocketConnection';
+import { useModifierModal } from '@hooks/useModifierModal';
+import LoadingScreen from '@components/common/LoadingScreen';
+import KdsColumn from '@components/common/KdsColumn';
 import BarModeToggle from './components/BarModeToggle';
 import BarCategoryPills from './components/BarCategoryPills';
 import BarItemGrid from './components/BarItemGrid';
 import BarSalePanel from './components/BarSalePanel';
 import BarKeypadView from './components/BarKeypadView';
 import ConnectionStatus from '../kds/components/ConnectionStatus';
-import OrderCard from '../kds/components/OrderCard';
 import ModifierModal from '../pos/components/ModifierModal';
 import {
   collectMenuItems,
@@ -51,8 +44,6 @@ import {
 } from '@utils/terminalMenuUtils';
 import type {
   TransformedMenuCategory,
-  TransformedMenuItem,
-  TransformedModifier,
   Order,
   OrderStatus,
   CreateOrderRequest,
@@ -64,12 +55,6 @@ type BarTab = 'keypad' | 'library' | 'favorites' | 'menu';
 
 const BEVERAGE_REGEX = /beer|cocktail|drink|beverage|wine|spirit|bar|liquor/i;
 
-/** Column header colors for the incoming KDS view */
-const COLUMN_COLORS = {
-  new: { bg: '#2563EB', text: '#FFFFFF' },
-  preparing: { bg: '#D97706', text: '#FFFFFF' },
-  ready: { bg: '#059669', text: '#FFFFFF' },
-} as const;
 
 const TAB_OPTIONS: Array<{ key: BarTab; label: string }> = [
   { key: 'keypad', label: 'Keypad' },
@@ -118,9 +103,10 @@ export default function BarTerminalScreen(
   const [keypadValue, setKeypadValue] = useState('');
   const [isLoadingMenu, setIsLoadingMenu] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isConnected, setIsConnected] = useState(false);
   const [deviceId, setDeviceId] = useState<string | null>(null);
-  const [modifierItem, setModifierItem] = useState<TransformedMenuItem | null>(null);
+
+  const { isConnected } = useSocketConnection({ restaurantId, token, deviceType: 'bar', addOrder, updateOrder });
+  const { modifierItem, handleItemPress, handleModifierConfirm, clearModifierItem } = useModifierModal(addItem);
 
   // Track previous new order count for vibration alert
   const prevNewOrderCountRef = useRef(0);
@@ -212,17 +198,6 @@ export default function BarTerminalScreen(
 
   const showCollectPayment = paymentProcessor !== 'none';
 
-  // Socket connection status polling
-  useEffect(() => {
-    const checkConnection = () => {
-      const sock = getSocket();
-      setIsConnected(sock?.connected ?? false);
-    };
-    checkConnection();
-    const interval = setInterval(checkConnection, 2000);
-    return () => clearInterval(interval);
-  }, []);
-
   // Initialize: load menu, settings, stations, orders, connect socket
   useEffect(() => {
     if (!restaurantId || !token) { return; }
@@ -279,8 +254,7 @@ export default function BarTerminalScreen(
         setOrders(existingOrders);
 
         // Connect socket
-        connectSocket(token);
-        joinRestaurant({ restaurantId, deviceId: devId, deviceType: 'bar' });
+        connectAndJoin(token, restaurantId, devId, 'bar');
       } catch (err) {
         console.error('[Bar] Init error:', err);
         Alert.alert('Load Error', 'Failed to load bar data. Please try again.');
@@ -290,17 +264,8 @@ export default function BarTerminalScreen(
     };
 
     void init();
-
-    const unsubNew = onNewOrder((event) => addOrder(event.order));
-    const unsubUpdated = onOrderUpdated((event) => updateOrder(event.order));
-
-    return () => {
-      unsubNew();
-      unsubUpdated();
-      disconnectSocket();
-    };
   }, [
-    restaurantId, token, addOrder, updateOrder, setOrders,
+    restaurantId, token, setOrders,
     setBarSettings, setPaymentProcessorAction, setTaxRateAction,
     setStationsAction, setCategoryStationMappingsAction,
   ]);
@@ -322,20 +287,6 @@ export default function BarTerminalScreen(
     return undefined;
   }, [newOrders.length]);
 
-  const handleItemPress = useCallback((item: TransformedMenuItem) => {
-    if (item.modifierGroups.length > 0) {
-      setModifierItem(item);
-    } else {
-      addItem(item, []);
-    }
-  }, [addItem]);
-
-  const handleModifierConfirm = useCallback((selectedModifiers: TransformedModifier[]) => {
-    if (modifierItem) {
-      addItem(modifierItem, selectedModifiers);
-    }
-    setModifierItem(null);
-  }, [modifierItem, addItem]);
 
   const handleKeyPress = useCallback((key: string) => {
     setKeypadValue((prev) => handleKeypadPress(prev, key));
@@ -385,12 +336,7 @@ export default function BarTerminalScreen(
   }, []);
 
   if (isLoadingMenu) {
-    return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading bar terminal...</Text>
-      </SafeAreaView>
-    );
+    return <LoadingScreen message="Loading bar terminal..." />;
   }
 
   return (
@@ -476,95 +422,9 @@ export default function BarTerminalScreen(
 
           {/* 3-column KDS layout */}
           <View style={styles.columnsContainer}>
-            {/* NEW column */}
-            <View style={styles.column}>
-              <View style={[styles.columnHeader, { backgroundColor: COLUMN_COLORS.new.bg }]}>
-                <Text style={[styles.columnHeaderText, { color: COLUMN_COLORS.new.text }]}>NEW</Text>
-                <View style={styles.columnCountBadge}>
-                  <Text style={styles.columnCountText}>{newOrders.length}</Text>
-                </View>
-              </View>
-              {newOrders.length === 0 ? (
-                <View style={styles.emptyColumn}>
-                  <Text style={styles.emptyColumnText}>No new orders</Text>
-                </View>
-              ) : (
-                <FlatList
-                  data={newOrders}
-                  keyExtractor={(o) => o.id}
-                  contentContainerStyle={styles.columnBody}
-                  showsVerticalScrollIndicator={false}
-                  renderItem={({ item }) => (
-                    <OrderCard
-                      order={item}
-                      column="new"
-                      onBump={handleBump}
-                      showCollectPayment={false}
-                    />
-                  )}
-                />
-              )}
-            </View>
-
-            {/* PREPARING column */}
-            <View style={styles.column}>
-              <View style={[styles.columnHeader, { backgroundColor: COLUMN_COLORS.preparing.bg }]}>
-                <Text style={[styles.columnHeaderText, { color: COLUMN_COLORS.preparing.text }]}>PREPARING</Text>
-                <View style={styles.columnCountBadge}>
-                  <Text style={styles.columnCountText}>{preparingOrders.length}</Text>
-                </View>
-              </View>
-              {preparingOrders.length === 0 ? (
-                <View style={styles.emptyColumn}>
-                  <Text style={styles.emptyColumnText}>No orders preparing</Text>
-                </View>
-              ) : (
-                <FlatList
-                  data={preparingOrders}
-                  keyExtractor={(o) => o.id}
-                  contentContainerStyle={styles.columnBody}
-                  showsVerticalScrollIndicator={false}
-                  renderItem={({ item }) => (
-                    <OrderCard
-                      order={item}
-                      column="preparing"
-                      onBump={handleBump}
-                      showCollectPayment={false}
-                    />
-                  )}
-                />
-              )}
-            </View>
-
-            {/* READY column */}
-            <View style={styles.column}>
-              <View style={[styles.columnHeader, { backgroundColor: COLUMN_COLORS.ready.bg }]}>
-                <Text style={[styles.columnHeaderText, { color: COLUMN_COLORS.ready.text }]}>READY</Text>
-                <View style={styles.columnCountBadge}>
-                  <Text style={styles.columnCountText}>{readyOrders.length}</Text>
-                </View>
-              </View>
-              {readyOrders.length === 0 ? (
-                <View style={styles.emptyColumn}>
-                  <Text style={styles.emptyColumnText}>No orders ready</Text>
-                </View>
-              ) : (
-                <FlatList
-                  data={readyOrders}
-                  keyExtractor={(o) => o.id}
-                  contentContainerStyle={styles.columnBody}
-                  showsVerticalScrollIndicator={false}
-                  renderItem={({ item }) => (
-                    <OrderCard
-                      order={item}
-                      column="ready"
-                      onBump={handleBump}
-                      showCollectPayment={showCollectPayment}
-                    />
-                  )}
-                />
-              )}
-            </View>
+            <KdsColumn title="NEW" column="new" orders={newOrders} emptyText="No new orders" onBump={handleBump} showCollectPayment={false} />
+            <KdsColumn title="PREPARING" column="preparing" orders={preparingOrders} emptyText="No orders preparing" onBump={handleBump} showCollectPayment={false} />
+            <KdsColumn title="READY" column="ready" orders={readyOrders} emptyText="No orders ready" onBump={handleBump} showCollectPayment={showCollectPayment} />
           </View>
         </View>
       ) : null}
@@ -575,7 +435,7 @@ export default function BarTerminalScreen(
           visible={true}
           item={modifierItem}
           onConfirm={handleModifierConfirm}
-          onCancel={() => setModifierItem(null)}
+          onCancel={clearModifierItem}
         />
       ) : null}
     </SafeAreaView>

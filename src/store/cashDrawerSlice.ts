@@ -20,8 +20,10 @@ function computeExpectedBalance(session: CashDrawerSession): number {
   return Math.round(balance * 100) / 100;
 }
 
+let idCounter = 0;
 function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  idCounter += 1;
+  return `${Date.now()}-${idCounter}`;
 }
 
 export interface CashDrawerSlice {

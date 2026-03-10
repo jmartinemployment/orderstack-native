@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ActivityIndicator,
   Alert,
   TouchableOpacity,
 } from 'react-native';
@@ -14,6 +13,8 @@ import { getFullMenu } from '@api/menu';
 import { getRestaurantSettings } from '@api/settings';
 import { createOrder } from '@api/orders';
 import { getDeviceId } from '@services/deviceService';
+import { useModifierModal } from '@hooks/useModifierModal';
+import LoadingScreen from '@components/common/LoadingScreen';
 import KioskMenuBrowser from './components/KioskMenuBrowser';
 import KioskCart from './components/KioskCart';
 import ModifierModal from '../pos/components/ModifierModal';
@@ -21,7 +22,6 @@ import WeightScaleModal from '@components/common/WeightScaleModal';
 import type {
   TransformedMenuCategory,
   TransformedMenuItem,
-  TransformedModifier,
   CreateOrderRequest,
 } from '@models/index';
 import type { KioskHomeScreenProps } from '@navigation/types';
@@ -45,8 +45,7 @@ export default function KioskHomeScreen(_props: Readonly<KioskHomeScreenProps>):
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [lastOrderNumber, setLastOrderNumber] = useState<string | null>(null);
 
-  // Modifier modal state
-  const [modifierItem, setModifierItem] = useState<TransformedMenuItem | null>(null);
+  const { modifierItem, handleItemPress: baseItemPress, handleModifierConfirm, clearModifierItem } = useModifierModal(addItem);
 
   // Weight scale modal state
   const [weightItem, setWeightItem] = useState<TransformedMenuItem | null>(null);
@@ -100,20 +99,8 @@ export default function KioskHomeScreen(_props: Readonly<KioskHomeScreenProps>):
       setWeightItem(item);
       return;
     }
-
-    if (item.modifierGroups.length > 0) {
-      setModifierItem(item);
-    } else {
-      addItem(item, []);
-    }
-  }, [addItem]);
-
-  const handleModifierConfirm = useCallback((selectedModifiers: TransformedModifier[]) => {
-    if (modifierItem) {
-      addItem(modifierItem, selectedModifiers);
-    }
-    setModifierItem(null);
-  }, [modifierItem, addItem]);
+    baseItemPress(item);
+  }, [baseItemPress]);
 
   const handleWeightConfirm = useCallback((weight: number) => {
     if (weightItem) {
@@ -157,12 +144,7 @@ export default function KioskHomeScreen(_props: Readonly<KioskHomeScreenProps>):
   }, []);
 
   if (isLoadingMenu) {
-    return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading menu...</Text>
-      </SafeAreaView>
-    );
+    return <LoadingScreen message="Loading menu..." />;
   }
 
   // Welcome screen — big "Start Order" button
@@ -258,7 +240,7 @@ export default function KioskHomeScreen(_props: Readonly<KioskHomeScreenProps>):
           visible={true}
           item={modifierItem}
           onConfirm={handleModifierConfirm}
-          onCancel={() => setModifierItem(null)}
+          onCancel={clearModifierItem}
         />
       )}
 
