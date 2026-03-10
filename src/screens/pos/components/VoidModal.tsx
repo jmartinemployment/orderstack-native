@@ -194,7 +194,7 @@ export default function VoidModal({
               {/* Keypad */}
               <View style={styles.keypad}>
                 {PIN_KEYPAD.map((row, rowIdx) => (
-                  <View key={`row-${rowIdx}`} style={styles.keypadRow}>
+                  <View key={row.join('-')} style={styles.keypadRow}>
                     {row.map((key) => (
                       <TouchableOpacity
                         key={key}

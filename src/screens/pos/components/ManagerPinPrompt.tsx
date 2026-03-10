@@ -94,7 +94,7 @@ export default function ManagerPinPrompt({
           {/* Keypad */}
           <View style={styles.keypad}>
             {KEYPAD_KEYS.map((row, rowIdx) => (
-              <View key={`row-${rowIdx}`} style={styles.keypadRow}>
+              <View key={row.join('-')} style={styles.keypadRow}>
                 {row.map((key) => (
                   <TouchableOpacity
                     key={key}

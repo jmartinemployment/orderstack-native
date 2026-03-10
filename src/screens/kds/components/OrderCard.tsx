@@ -288,6 +288,114 @@ function OrderCardActionButtons({
   );
 }
 
+function getElapsedStyle(
+  isUrgent: boolean,
+  isWarning: boolean,
+  styles: ReturnType<typeof createStyles>,
+): object[] {
+  if (isUrgent) return [styles.elapsed, styles.elapsedUrgent];
+  if (isWarning) return [styles.elapsed, styles.elapsedWarning];
+  return [styles.elapsed, styles.elapsedNormal];
+}
+
+function OrderCardInfoSection({
+  hasStationFilter,
+  matchingCount,
+  totalCount,
+  showPrepBar,
+  prepProgress,
+  prepRemainingMinutes,
+  isThrottled,
+  order,
+  shortOrderNumber,
+  onReleaseThrottle,
+  customerName,
+  showPrintStatus,
+  printStatus,
+  onRetryPrint,
+  styles,
+  infoColor,
+}: Readonly<{
+  hasStationFilter: boolean;
+  matchingCount: number;
+  totalCount: number;
+  showPrepBar: boolean;
+  prepProgress: number;
+  prepRemainingMinutes: number;
+  isThrottled: boolean;
+  order: Order;
+  shortOrderNumber: string;
+  onReleaseThrottle?: (orderId: string) => void;
+  customerName: string | null;
+  showPrintStatus: boolean;
+  printStatus?: PrintStatus;
+  onRetryPrint?: (orderId: string) => void;
+  styles: ReturnType<typeof createStyles>;
+  infoColor: string;
+}>): React.JSX.Element {
+  return (
+    <>
+      {hasStationFilter ? (
+        <View style={styles.stationFilterBadge}>
+          <Text style={styles.stationFilterBadgeText}>
+            {matchingCount} of {totalCount} items for this station
+          </Text>
+        </View>
+      ) : null}
+
+      {showPrepBar ? (
+        <View style={styles.progressBarContainer}>
+          <View
+            style={[
+              styles.progressBarFill,
+              {
+                width: `${Math.min(prepProgress * 100, 100)}%`,
+                backgroundColor: getProgressColor(prepProgress),
+              },
+            ]}
+          />
+          <Text style={styles.progressBarText}>{getPrepTimeText(prepRemainingMinutes)}</Text>
+        </View>
+      ) : null}
+
+      {isThrottled ? (
+        <ThrottleBadge
+          order={order}
+          shortOrderNumber={shortOrderNumber}
+          onReleaseThrottle={onReleaseThrottle}
+          styles={styles}
+        />
+      ) : null}
+
+      {(customerName ?? order.table) ? (
+        <View style={styles.metaRow}>
+          {customerName ? <Text style={styles.metaText}>{customerName}</Text> : null}
+          {order.table ? (
+            <Text style={styles.metaText}>Table {order.table.tableNumber}</Text>
+          ) : null}
+        </View>
+      ) : null}
+
+      {order.orderSource === 'marketplace' ? (
+        <View style={styles.marketplaceBadge}>
+          <Text style={styles.marketplaceBadgeText}>Marketplace</Text>
+        </View>
+      ) : null}
+
+      {showPrintStatus ? (
+        <PrintStatusBadge
+          printStatus={printStatus!}
+          orderId={order.id}
+          shortOrderNumber={shortOrderNumber}
+          onRetryPrint={onRetryPrint}
+          styles={styles}
+          infoColor={infoColor}
+        />
+      ) : null}
+    </>
+  );
+}
+
 // --- Main component ---
 
 export default function OrderCard({
@@ -413,8 +521,13 @@ export default function OrderCard({
     }
   }, [onRemakeItem, order.id, remakeConfirmItemId]);
 
+  const elapsedStyle = getElapsedStyle(isUrgent, isWarning, styles);
+  const cardStyle = [styles.card, isUrgent && styles.cardUrgent, isWarning && styles.cardWarning];
+  const showPrepBar = column === 'preparing' || column === 'new';
+  const showPrintStatus = column === 'ready' && printStatus !== undefined && printStatus !== 'none';
+
   return (
-    <View style={[styles.card, isUrgent && styles.cardUrgent, isWarning && styles.cardWarning]}>
+    <View style={cardStyle}>
       {/* Header row */}
       <TouchableOpacity
         style={styles.header}
@@ -434,81 +547,27 @@ export default function OrderCard({
             <Text style={styles.orderTypeText}>{orderTypeLabel}</Text>
           </View>
         </View>
-        <Text
-          style={[
-            styles.elapsed,
-            isUrgent && styles.elapsedUrgent,
-            isWarning && styles.elapsedWarning,
-            !isUrgent && !isWarning && styles.elapsedNormal,
-          ]}
-        >
-          {elapsed}
-        </Text>
+        <Text style={elapsedStyle}>{elapsed}</Text>
       </TouchableOpacity>
 
-      {/* Station filter item count badge */}
-      {hasStationFilter ? (
-        <View style={styles.stationFilterBadge}>
-          <Text style={styles.stationFilterBadgeText}>
-            {matchingCount} of {totalCount} items for this station
-          </Text>
-        </View>
-      ) : null}
-
-      {/* Prep time progress bar */}
-      {(column === 'preparing' || column === 'new') ? (
-        <View style={styles.progressBarContainer}>
-          <View
-            style={[
-              styles.progressBarFill,
-              {
-                width: `${Math.min(prepProgress * 100, 100)}%`,
-                backgroundColor: getProgressColor(prepProgress),
-              },
-            ]}
-          />
-          <Text style={styles.progressBarText}>{getPrepTimeText(prepRemainingMinutes)}</Text>
-        </View>
-      ) : null}
-
-      {/* Throttle hold badge */}
-      {isThrottled ? (
-        <ThrottleBadge
-          order={order}
-          shortOrderNumber={shortOrderNumber}
-          onReleaseThrottle={onReleaseThrottle}
-          styles={styles}
-        />
-      ) : null}
-
-      {/* Customer / Table info */}
-      {(customerName ?? order.table) ? (
-        <View style={styles.metaRow}>
-          {customerName ? <Text style={styles.metaText}>{customerName}</Text> : null}
-          {order.table ? (
-            <Text style={styles.metaText}>Table {order.table.tableNumber}</Text>
-          ) : null}
-        </View>
-      ) : null}
-
-      {/* Order source badge for marketplace */}
-      {order.orderSource === 'marketplace' ? (
-        <View style={styles.marketplaceBadge}>
-          <Text style={styles.marketplaceBadgeText}>Marketplace</Text>
-        </View>
-      ) : null}
-
-      {/* Print status badge (READY column) */}
-      {column === 'ready' && printStatus && printStatus !== 'none' ? (
-        <PrintStatusBadge
-          printStatus={printStatus}
-          orderId={order.id}
-          shortOrderNumber={shortOrderNumber}
-          onRetryPrint={onRetryPrint}
-          styles={styles}
-          infoColor={colors.info}
-        />
-      ) : null}
+      <OrderCardInfoSection
+        hasStationFilter={hasStationFilter}
+        matchingCount={matchingCount}
+        totalCount={totalCount}
+        showPrepBar={showPrepBar}
+        prepProgress={prepProgress}
+        prepRemainingMinutes={prepRemainingMinutes}
+        isThrottled={isThrottled}
+        order={order}
+        shortOrderNumber={shortOrderNumber}
+        onReleaseThrottle={onReleaseThrottle}
+        customerName={customerName}
+        showPrintStatus={showPrintStatus}
+        printStatus={printStatus}
+        onRetryPrint={onRetryPrint}
+        styles={styles}
+        infoColor={colors.info}
+      />
 
       {/* Items */}
       <View style={styles.itemsContainer}>
