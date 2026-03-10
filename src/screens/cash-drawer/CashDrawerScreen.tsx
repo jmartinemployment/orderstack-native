@@ -170,7 +170,7 @@ export default function CashDrawerScreen(_props: Readonly<CashDrawerScreenProps>
 
   // Open drawer view
   if (currentView === 'open') {
-    return renderOpenDrawerView(floatInput, setFloatInput, styles, colors, handleOpenDrawer);
+    return renderOpenDrawerView(floatInput, setFloatInput, styles, handleOpenDrawer);
   }
 
   // Close drawer view
@@ -180,7 +180,7 @@ export default function CashDrawerScreen(_props: Readonly<CashDrawerScreenProps>
 
   // Add event view
   if (currentView === 'event') {
-    return renderAddEventView(eventType, setEventType, eventAmountInput, setEventAmountInput, eventReason, setEventReason, styles, colors, setCashDrawerView, handleAddEvent);
+    return renderAddEventView({ eventType, setEventType, eventAmountInput, setEventAmountInput, eventReason, setEventReason, styles, colors, setCashDrawerView, handleAddEvent });
   }
 
   // Status view (default when drawer is open)
@@ -295,11 +295,34 @@ function renderClosedSummary(
   );
 }
 
+function renderKeypadKey(
+  key: string,
+  onPress: () => void,
+  keyStyle: object,
+  keyTextStyle: object,
+  backspaceStyle: object,
+  backspaceTextStyle: object,
+): React.JSX.Element {
+  return (
+    <TouchableOpacity
+      key={key}
+      style={[keyStyle, key === 'backspace' && backspaceStyle]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={getKeyAccessibilityLabel(key)}
+      activeOpacity={0.6}
+    >
+      <Text style={[keyTextStyle, key === 'backspace' && backspaceTextStyle]}>
+        {key === 'backspace' ? '\u232B' : key}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
 function renderOpenDrawerView(
   floatInput: string,
   setFloatInput: React.Dispatch<React.SetStateAction<string>>,
   styles: ReturnType<typeof createStyles>,
-  colors: ReturnType<typeof useTheme>['colors'],
   handleOpenDrawer: () => void,
 ): React.JSX.Element {
   const floatDisplay = floatInput.length > 0 ? floatInput : '0';
@@ -334,19 +357,10 @@ function renderOpenDrawerView(
         <View style={styles.keypad}>
           {KEYPAD_ROWS.map((row, rowIdx) => (
             <View key={KEYPAD_ROW_KEYS[rowIdx]} style={styles.keypadRow}>
-              {row.map((key) => (
-                <TouchableOpacity
-                  key={key}
-                  style={[styles.key, key === 'backspace' && styles.keyBackspace]}
-                  onPress={() => setFloatInput((prev) => handleKeypadPress(prev, key))}
-                  accessibilityRole="button"
-                  accessibilityLabel={getKeyAccessibilityLabel(key)}
-                  activeOpacity={0.6}
-                >
-                  <Text style={[styles.keyText, key === 'backspace' && styles.keyBackspaceText]}>
-                    {key === 'backspace' ? '\u232B' : key}
-                  </Text>
-                </TouchableOpacity>
+              {row.map((key) => renderKeypadKey(
+                key,
+                () => setFloatInput((prev) => handleKeypadPress(prev, key)),
+                styles.key, styles.keyText, styles.keyBackspace, styles.keyBackspaceText,
               ))}
             </View>
           ))}
@@ -441,18 +455,21 @@ function renderCloseDrawerView(
   );
 }
 
-function renderAddEventView(
-  eventType: CashEventType,
-  setEventType: React.Dispatch<React.SetStateAction<CashEventType>>,
-  eventAmountInput: string,
-  setEventAmountInput: React.Dispatch<React.SetStateAction<string>>,
-  eventReason: string,
-  setEventReason: React.Dispatch<React.SetStateAction<string>>,
-  styles: ReturnType<typeof createStyles>,
-  colors: ReturnType<typeof useTheme>['colors'],
-  setCashDrawerView: (view: CashDrawerView) => void,
-  handleAddEvent: () => void,
-): React.JSX.Element {
+interface AddEventViewOptions {
+  eventType: CashEventType;
+  setEventType: React.Dispatch<React.SetStateAction<CashEventType>>;
+  eventAmountInput: string;
+  setEventAmountInput: React.Dispatch<React.SetStateAction<string>>;
+  eventReason: string;
+  setEventReason: React.Dispatch<React.SetStateAction<string>>;
+  styles: ReturnType<typeof createStyles>;
+  colors: ReturnType<typeof useTheme>['colors'];
+  setCashDrawerView: (view: CashDrawerView) => void;
+  handleAddEvent: () => void;
+}
+
+function renderAddEventView(opts: AddEventViewOptions): React.JSX.Element {
+  const { eventType, setEventType, eventAmountInput, setEventAmountInput, eventReason, setEventReason, styles, colors, setCashDrawerView, handleAddEvent } = opts;
   const eventAmountDisplay = eventAmountInput.length > 0 ? eventAmountInput : '0';
   const canSubmit = eventAmountInput.length > 0 && !Number.isNaN(Number.parseFloat(eventAmountInput)) && Number.parseFloat(eventAmountInput) > 0 && eventReason.trim().length > 0;
 
@@ -511,19 +528,10 @@ function renderAddEventView(
         <View style={styles.keypadSmall}>
           {KEYPAD_ROWS.map((row, rowIdx) => (
             <View key={KEYPAD_ROW_KEYS[rowIdx]} style={styles.keypadRow}>
-              {row.map((key) => (
-                <TouchableOpacity
-                  key={key}
-                  style={[styles.keySmall, key === 'backspace' && styles.keyBackspace]}
-                  onPress={() => setEventAmountInput((prev) => handleKeypadPress(prev, key))}
-                  accessibilityRole="button"
-                  accessibilityLabel={getKeyAccessibilityLabel(key)}
-                  activeOpacity={0.6}
-                >
-                  <Text style={[styles.keyTextSmall, key === 'backspace' && styles.keyBackspaceText]}>
-                    {key === 'backspace' ? '\u232B' : key}
-                  </Text>
-                </TouchableOpacity>
+              {row.map((key) => renderKeypadKey(
+                key,
+                () => setEventAmountInput((prev) => handleKeypadPress(prev, key)),
+                styles.keySmall, styles.keyTextSmall, styles.keyBackspace, styles.keyBackspaceText,
               ))}
             </View>
           ))}

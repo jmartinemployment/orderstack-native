@@ -120,7 +120,7 @@ export default function CartPanel({ onSubmitOrder, onSendToKitchen, onAddDiscoun
       </View>
 
       {/* Customer row */}
-      {showCustomerForm ? null : hasCustomer ? (
+      {!showCustomerForm && hasCustomer && (
         <TouchableOpacity
           style={styles.customerRow}
           onPress={handleOpenCustomerForm}
@@ -140,7 +140,8 @@ export default function CartPanel({ onSubmitOrder, onSendToKitchen, onAddDiscoun
             <Text style={styles.customerClearText}>{'\u2715'}</Text>
           </TouchableOpacity>
         </TouchableOpacity>
-      ) : (
+      )}
+      {!showCustomerForm && !hasCustomer && (
         <TouchableOpacity
           style={styles.customerRow}
           onPress={handleOpenCustomerForm}

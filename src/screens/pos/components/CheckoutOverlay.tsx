@@ -71,7 +71,7 @@ export default function CheckoutOverlay({
   const [currentStep, setCurrentStep] = useState<CheckoutStep>('dining');
   const [selectedOrderType, setSelectedOrderType] = useState<string>(initialOrderType);
   const [selectedTableId, setSelectedTableId] = useState<string | undefined>(initialTableId);
-  const [selectedTableNumber, setSelectedTableNumber] = useState<string | undefined>(undefined);
+  const [, setSelectedTableNumber] = useState<string | undefined>(undefined);
   const [custName, setCustName] = useState(initialCustomerName ?? '');
   const [custPhone, setCustPhone] = useState(initialCustomerPhone ?? '');
   const [custEmail, setCustEmail] = useState(initialCustomerEmail ?? '');
@@ -90,9 +90,7 @@ export default function CheckoutOverlay({
 
     // Step 1: Dining option (skip if already set)
     const hasOrderType = initialOrderType.length > 0 && initialOrderType !== 'dine_in';
-    if (!hasOrderType && initialOrderType === 'dine_in') {
-      result.push('dining');
-    } else if (!initialOrderType) {
+    if (!hasOrderType) {
       result.push('dining');
     }
 
@@ -170,15 +168,15 @@ export default function CheckoutOverlay({
 
   const handleDiningSelect = useCallback((type: string) => {
     setSelectedOrderType(type);
-    if (type !== 'dine_in') {
+    if (type === 'dine_in') {
+      goNext();
+    } else {
       // Skip table step
       const nextSteps = steps.filter((s) => s !== 'table');
       const nextIdx = nextSteps.indexOf('dining') + 1;
       if (nextIdx < nextSteps.length) {
         setCurrentStep(nextSteps[nextIdx]);
       }
-    } else {
-      goNext();
     }
   }, [steps, goNext]);
 
@@ -279,28 +277,7 @@ export default function CheckoutOverlay({
 
   // Success overlay
   if (showSuccess) {
-    return (
-      <Modal visible={visible} transparent animationType="fade">
-        <View style={styles.overlay}>
-          <Animated.View
-            style={[
-              styles.successContainer,
-              {
-                opacity: successAnim,
-                transform: [{ scale: successAnim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }) }],
-              },
-            ]}
-          >
-            <View style={styles.successCircle}>
-              <Text style={styles.successCheck}>{'\u2713'}</Text>
-            </View>
-            <Text style={styles.successText}>
-              {mode === 'charge' ? 'Order Complete' : 'Sent to Kitchen'}
-            </Text>
-          </Animated.View>
-        </View>
-      </Modal>
-    );
+    return renderSuccessOverlay(visible, successAnim, mode, styles);
   }
 
   return (
@@ -555,6 +532,36 @@ export default function CheckoutOverlay({
         onPaymentFailed={handlePaymentFailed}
         onCancel={handlePaymentCancel}
       />
+    </Modal>
+  );
+}
+
+function renderSuccessOverlay(
+  visible: boolean,
+  successAnim: Animated.Value,
+  mode: 'charge' | 'send',
+  styles: ReturnType<typeof createStyles>,
+): React.JSX.Element {
+  return (
+    <Modal visible={visible} transparent animationType="fade">
+      <View style={styles.overlay}>
+        <Animated.View
+          style={[
+            styles.successContainer,
+            {
+              opacity: successAnim,
+              transform: [{ scale: successAnim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }) }],
+            },
+          ]}
+        >
+          <View style={styles.successCircle}>
+            <Text style={styles.successCheck}>{'\u2713'}</Text>
+          </View>
+          <Text style={styles.successText}>
+            {mode === 'charge' ? 'Order Complete' : 'Sent to Kitchen'}
+          </Text>
+        </Animated.View>
+      </View>
     </Modal>
   );
 }

@@ -11,7 +11,7 @@ import { useTheme } from '@theme/index';
 import { useAppStore, useSelectedRestaurantId, useOrderType, useCartTable, useCustomerInfo } from '@store/index';
 import { getFullMenu } from '@api/menu';
 import { getTables, updateTableStatus } from '@api/tables';
-import { createOrder, getOrders } from '@api/orders';
+import { getOrders } from '@api/orders';
 import { getDeviceId } from '@services/deviceService';
 import { connectSocket, joinRestaurant, onNewOrder, onOrderUpdated, disconnectSocket } from '@services/socketService';
 import TopNavigationTabs from './components/TopNavigationTabs';
@@ -42,7 +42,6 @@ import type {
   TransformedMenuItem,
   TransformedModifier,
   RestaurantTable,
-  CreateOrderRequest,
   DiscountResult,
   VoidResult,
 } from '@models/index';
@@ -321,65 +320,6 @@ export default function PosTerminalScreen(_props: Readonly<PosTerminalScreenProp
     }
   }, [restaurantId, tableId, setCheckPresented, showToast]);
 
-  const handleSubmitOrder = useCallback(async () => {
-    if (!restaurantId || !deviceId || cartItems.length === 0) { return; }
-
-    setIsSubmitting(true);
-    try {
-      const payload: CreateOrderRequest = {
-        orderType,
-        orderSource: 'pos',
-        sourceDeviceId: deviceId,
-        tableId: orderType === 'dine_in' ? (tableId ?? undefined) : undefined,
-        items: cartItems.map((ci) => ({
-          menuItemId: ci.menuItemId,
-          quantity: ci.quantity,
-          specialInstructions: ci.specialInstructions ?? undefined,
-          modifiers: ci.modifiers.map((m) => ({ modifierId: m.modifierId })),
-        })),
-      };
-
-      const order = await createOrder(restaurantId, payload);
-      addOrder(order);
-      clearCart();
-      showToast(`Order ${order.orderNumber} submitted successfully.`, 'success');
-    } catch (err) {
-      console.error('[POS] Submit error:', err);
-      showToast('Could not submit order. Please try again.', 'error');
-    } finally {
-      setIsSubmitting(false);
-    }
-  }, [restaurantId, deviceId, cartItems, orderType, tableId, addOrder, clearCart, showToast]);
-
-  const handleSendToKitchen = useCallback(async () => {
-    if (!restaurantId || !deviceId || cartItems.length === 0) { return; }
-
-    setIsSubmitting(true);
-    try {
-      const payload: CreateOrderRequest = {
-        orderType,
-        orderSource: 'pos',
-        sourceDeviceId: deviceId,
-        tableId: orderType === 'dine_in' ? (tableId ?? undefined) : undefined,
-        items: cartItems.map((ci) => ({
-          menuItemId: ci.menuItemId,
-          quantity: ci.quantity,
-          specialInstructions: ci.specialInstructions ?? undefined,
-          modifiers: ci.modifiers.map((m) => ({ modifierId: m.modifierId })),
-        })),
-      };
-
-      const order = await createOrder(restaurantId, payload);
-      addOrder(order);
-      clearCart();
-      showToast(`Order ${order.orderNumber} sent to kitchen.`, 'success');
-    } catch (err) {
-      console.error('[POS] Send to kitchen error:', err);
-      showToast('Could not send to kitchen. Please try again.', 'error');
-    } finally {
-      setIsSubmitting(false);
-    }
-  }, [restaurantId, deviceId, cartItems, orderType, tableId, addOrder, clearCart, showToast]);
 
   if (isLoadingMenu) {
     return (
