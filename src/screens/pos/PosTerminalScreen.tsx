@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ActivityIndicator,
   TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,7 +12,8 @@ import { getFullMenu } from '@api/menu';
 import { getTables, updateTableStatus } from '@api/tables';
 import { getOrders } from '@api/orders';
 import { getDeviceId } from '@services/deviceService';
-import { connectSocket, joinRestaurant, onNewOrder, onOrderUpdated, disconnectSocket } from '@services/socketService';
+import { connectAndJoin } from '@hooks/useSocketConnection';
+import LoadingScreen from '@components/common/LoadingScreen';
 import TopNavigationTabs from './components/TopNavigationTabs';
 import type { TopTab } from './components/TopNavigationTabs';
 import MenuCategoryTabs from './components/MenuCategoryTabs';
@@ -164,8 +164,7 @@ export default function PosTerminalScreen(_props: Readonly<PosTerminalScreenProp
         setOrders(existingOrders);
 
         // Connect socket
-        connectSocket(token);
-        joinRestaurant({ restaurantId, deviceId: devId, deviceType: 'pos' });
+        connectAndJoin(token, restaurantId, devId, 'pos');
       } catch (err) {
         console.error('[POS] Init error:', err);
         showToast('Failed to load menu data', 'error');
@@ -175,20 +174,7 @@ export default function PosTerminalScreen(_props: Readonly<PosTerminalScreenProp
     };
 
     init();
-
-    const unsubNew = onNewOrder((event) => {
-      addOrder(event.order);
-    });
-    const unsubUpdated = onOrderUpdated((event) => {
-      updateOrder(event.order);
-    });
-
-    return () => {
-      unsubNew();
-      unsubUpdated();
-      disconnectSocket();
-    };
-  }, [restaurantId, token, addOrder, updateOrder, setOrders, showToast]);
+  }, [restaurantId, token, setOrders, showToast]);
 
   const handleItemPress = useCallback((item: TransformedMenuItem) => {
     if (item.modifierGroups.length > 0) {
@@ -320,12 +306,7 @@ export default function PosTerminalScreen(_props: Readonly<PosTerminalScreenProp
 
 
   if (isLoadingMenu) {
-    return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading menu...</Text>
-      </SafeAreaView>
-    );
+    return <LoadingScreen message="Loading menu..." />;
   }
 
   return (

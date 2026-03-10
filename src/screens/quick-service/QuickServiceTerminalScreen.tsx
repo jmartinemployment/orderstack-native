@@ -1,9 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
-  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@theme/index';
@@ -16,13 +14,9 @@ import { getFullMenu } from '@api/menu';
 import { createOrder } from '@api/orders';
 import { getRestaurantSettings } from '@api/settings';
 import { getDeviceId } from '@services/deviceService';
-import {
-  connectSocket,
-  joinRestaurant,
-  onNewOrder,
-  onOrderUpdated,
-  disconnectSocket,
-} from '@services/socketService';
+import { connectAndJoin } from '@hooks/useSocketConnection';
+import { useModifierModal } from '@hooks/useModifierModal';
+import LoadingScreen from '@components/common/LoadingScreen';
 import TopNavigationTabs from '../pos/components/TopNavigationTabs';
 import type { TopTab } from '../pos/components/TopNavigationTabs';
 import BarCategoryPills from '../bar/components/BarCategoryPills';
@@ -41,8 +35,6 @@ import {
 } from '@utils/terminalMenuUtils';
 import type {
   TransformedMenuCategory,
-  TransformedMenuItem,
-  TransformedModifier,
   CreateOrderRequest,
 } from '@models/index';
 import type { QuickServiceTerminalScreenProps } from '@navigation/types';
@@ -80,7 +72,8 @@ export default function QuickServiceTerminalScreen(
   const [isLoadingMenu, setIsLoadingMenu] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deviceId, setDeviceId] = useState<string | null>(null);
-  const [modifierItem, setModifierItem] = useState<TransformedMenuItem | null>(null);
+
+  const { modifierItem, handleItemPress, handleModifierConfirm, clearModifierItem } = useModifierModal(addItem);
 
   const { toast, showToast, dismissToast } = useToast();
   const styles = createStyles(colors, spacing, typography);
@@ -122,8 +115,7 @@ export default function QuickServiceTerminalScreen(
         }
 
         // Connect socket for real-time order updates
-        connectSocket(token);
-        joinRestaurant({ restaurantId, deviceId: devId, deviceType: 'pos' });
+        connectAndJoin(token, restaurantId, devId, 'pos');
       } catch (err) {
         console.error('[QuickService] Init error:', err);
         showToast('Failed to load menu. Please try again.', 'error');
@@ -133,31 +125,8 @@ export default function QuickServiceTerminalScreen(
     };
 
     void init();
+  }, [restaurantId, token, setTaxRateAction, showToast]);
 
-    const unsubNew = onNewOrder((event) => addOrder(event.order));
-    const unsubUpdated = onOrderUpdated((event) => updateOrder(event.order));
-
-    return () => {
-      unsubNew();
-      unsubUpdated();
-      disconnectSocket();
-    };
-  }, [restaurantId, token, addOrder, updateOrder, setTaxRateAction, showToast]);
-
-  const handleItemPress = useCallback((item: TransformedMenuItem) => {
-    if (item.modifierGroups.length > 0) {
-      setModifierItem(item);
-    } else {
-      addItem(item, []);
-    }
-  }, [addItem]);
-
-  const handleModifierConfirm = useCallback((selectedModifiers: TransformedModifier[]) => {
-    if (modifierItem) {
-      addItem(modifierItem, selectedModifiers);
-    }
-    setModifierItem(null);
-  }, [modifierItem, addItem]);
 
   const handleKeyPress = useCallback((key: string) => {
     setKeypadValue((prev) => handleKeypadPress(prev, key));
@@ -197,12 +166,7 @@ export default function QuickServiceTerminalScreen(
   }, [restaurantId, deviceId, cartItems, addOrder, clearCart, showToast]);
 
   if (isLoadingMenu) {
-    return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading quick service terminal...</Text>
-      </SafeAreaView>
-    );
+    return <LoadingScreen message="Loading quick service terminal..." />;
   }
 
   return (
@@ -256,7 +220,7 @@ export default function QuickServiceTerminalScreen(
           visible={true}
           item={modifierItem}
           onConfirm={handleModifierConfirm}
-          onCancel={() => setModifierItem(null)}
+          onCancel={clearModifierItem}
         />
       ) : null}
 

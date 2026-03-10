@@ -2,9 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
-  FlatList,
   StyleSheet,
-  ActivityIndicator,
   TouchableOpacity,
   Alert,
 } from 'react-native';
@@ -24,18 +22,12 @@ import {
 } from '@api/orders';
 import { getFullMenu } from '@api/menu';
 import { getDeviceId } from '@services/deviceService';
-import {
-  connectSocket,
-  joinRestaurant,
-  onNewOrder,
-  onOrderUpdated,
-  disconnectSocket,
-  getSocket,
-} from '@services/socketService';
+import { useSocketConnection, connectAndJoin } from '@hooks/useSocketConnection';
+import LoadingScreen from '@components/common/LoadingScreen';
+import KdsColumn from '@components/common/KdsColumn';
 import { useToast } from '@hooks/useToast';
 import Toast from '@components/common/Toast';
 import ConnectionStatus from './components/ConnectionStatus';
-import OrderCard from './components/OrderCard';
 import PaymentTerminalModal from '@components/common/PaymentTerminalModal';
 import type { Order, OrderStatus, PrintStatus, OrderThrottlingStatus } from '@models/index';
 import type { KdsDisplayScreenProps } from '@navigation/types';
@@ -48,13 +40,6 @@ const SOURCE_FILTERS: Array<{ value: SourceFilter; label: string }> = [
   { value: 'direct', label: 'Direct' },
 ];
 
-/** Column header colors matching Angular KDS */
-const COLUMN_COLORS = {
-  new: { bg: '#2563EB', text: '#FFFFFF' },
-  preparing: { bg: '#D97706', text: '#FFFFFF' },
-  ready: { bg: '#059669', text: '#FFFFFF' },
-  throttled: { bg: '#B45309', text: '#FFFFFF' },
-} as const;
 
 /**
  * Sorts orders by createdAt ascending (oldest first — FIFO kitchen queue).
@@ -91,7 +76,6 @@ export default function KdsDisplayScreen(_props: Readonly<KdsDisplayScreenProps>
   const updateOrder = useAppStore((s) => s.updateOrder);
 
   const [isLoading, setIsLoading] = useState(true);
-  const [isConnected, setIsConnected] = useState(false);
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
   const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
 
@@ -120,16 +104,7 @@ export default function KdsDisplayScreen(_props: Readonly<KdsDisplayScreenProps>
     return s.paymentProcessor !== undefined && s.paymentProcessor !== 'none';
   });
 
-  // Socket connection status polling
-  useEffect(() => {
-    const checkConnection = () => {
-      const sock = getSocket();
-      setIsConnected(sock?.connected ?? false);
-    };
-    checkConnection();
-    const interval = setInterval(checkConnection, 2000);
-    return () => clearInterval(interval);
-  }, []);
+  const { isConnected } = useSocketConnection({ restaurantId, token, deviceType: 'kds', addOrder, updateOrder });
 
   // Fetch throttling status periodically
   useEffect(() => {
@@ -182,8 +157,7 @@ export default function KdsDisplayScreen(_props: Readonly<KdsDisplayScreenProps>
         });
         setOrders(existingOrders);
 
-        connectSocket(token);
-        joinRestaurant({ restaurantId, deviceId: devId, deviceType: 'kds' });
+        connectAndJoin(token, restaurantId, devId, 'kds');
       } catch (err) {
         console.error('[KDS] Init error:', err);
       } finally {
@@ -192,16 +166,9 @@ export default function KdsDisplayScreen(_props: Readonly<KdsDisplayScreenProps>
     };
 
     void init();
+  }, [restaurantId, token, setOrders]);
 
-    const unsubNew = onNewOrder((event) => addOrder(event.order));
-    const unsubUpdated = onOrderUpdated((event) => updateOrder(event.order));
-
-    return () => {
-      unsubNew();
-      unsubUpdated();
-      disconnectSocket();
-    };
-  }, [restaurantId, token, setOrders, addOrder, updateOrder]);
+  const isOrderRushed = useCallback((orderId: string) => rushedOrders.has(orderId), [rushedOrders]);
 
   const handleBump = useCallback(async (orderId: string, nextStatus: OrderStatus) => {
     if (!restaurantId) { return; }
@@ -372,12 +339,7 @@ export default function KdsDisplayScreen(_props: Readonly<KdsDisplayScreenProps>
   const avgWait = averageWaitMinutes(allActiveOrders);
 
   if (isLoading) {
-    return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Connecting to kitchen...</Text>
-      </SafeAreaView>
-    );
+    return <LoadingScreen message="Connecting to kitchen..." />;
   }
 
   return (
@@ -482,160 +444,14 @@ export default function KdsDisplayScreen(_props: Readonly<KdsDisplayScreenProps>
       <View style={styles.columnsContainer}>
         {/* THROTTLED column (conditional) */}
         {hasThrottledOrders ? (
-          <View style={styles.column}>
-            <View style={[styles.columnHeader, { backgroundColor: COLUMN_COLORS.throttled.bg }]}>
-              <Text style={[styles.columnHeaderText, { color: COLUMN_COLORS.throttled.text }]}>HELD</Text>
-              <View style={styles.countBadge}>
-                <Text style={styles.countBadgeText}>{throttledOrders.length}</Text>
-              </View>
-            </View>
-            {throttledOrders.length === 0 ? (
-              <View style={styles.emptyColumn}>
-                <Text style={styles.emptyColumnText}>No held orders</Text>
-              </View>
-            ) : (
-              <FlatList
-                data={throttledOrders}
-                keyExtractor={(o) => o.id}
-                contentContainerStyle={styles.columnBody}
-                showsVerticalScrollIndicator={false}
-                renderItem={({ item }) => (
-                  <OrderCard
-                    order={item}
-                    column="throttled"
-                    onBump={handleBump}
-                    showCollectPayment={false}
-                    isRushed={rushedOrders.has(item.id)}
-                    onRushToggle={handleRushToggle}
-                    onReleaseThrottle={handleReleaseThrottle}
-                    onRemakeItem={handleRemakeItem}
-                    estimatedPrepMinutes={estimatePrepMinutes(item)}
-                    stationFilterId={selectedStationId}
-                    menuItemToCategoryMap={menuItemToCategoryMap}
-                    categoryToStationMap={categoryToStationMap}
-                  />
-                )}
-              />
-            )}
-          </View>
+          <KdsColumn title="HELD" column="throttled" orders={throttledOrders} emptyText="No held orders" onBump={handleBump} showCollectPayment={false} isRushed={isOrderRushed} onRushToggle={handleRushToggle} onReleaseThrottle={handleReleaseThrottle} onRemakeItem={handleRemakeItem} estimatePrepMinutes={estimatePrepMinutes} stationFilterId={selectedStationId} menuItemToCategoryMap={menuItemToCategoryMap} categoryToStationMap={categoryToStationMap} />
         ) : null}
 
-        {/* NEW column */}
-        <View style={styles.column}>
-          <View style={[styles.columnHeader, { backgroundColor: COLUMN_COLORS.new.bg }]}>
-            <Text style={[styles.columnHeaderText, { color: COLUMN_COLORS.new.text }]}>NEW</Text>
-            <View style={styles.countBadge}>
-              <Text style={styles.countBadgeText}>{newOrders.length}</Text>
-            </View>
-          </View>
-          {newOrders.length === 0 ? (
-            <View style={styles.emptyColumn}>
-              <Text style={styles.emptyColumnText}>No new orders</Text>
-            </View>
-          ) : (
-            <FlatList
-              data={newOrders}
-              keyExtractor={(o) => o.id}
-              contentContainerStyle={styles.columnBody}
-              showsVerticalScrollIndicator={false}
-              renderItem={({ item }) => (
-                <OrderCard
-                  order={item}
-                  column="new"
-                  onBump={handleBump}
-                  showCollectPayment={false}
-                  isRushed={rushedOrders.has(item.id)}
-                  onRushToggle={handleRushToggle}
-                  onRemakeItem={handleRemakeItem}
-                  onHoldOrder={handleHoldOrder}
-                  estimatedPrepMinutes={estimatePrepMinutes(item)}
-                  stationFilterId={selectedStationId}
-                  menuItemToCategoryMap={menuItemToCategoryMap}
-                  categoryToStationMap={categoryToStationMap}
-                />
-              )}
-            />
-          )}
-        </View>
+        <KdsColumn title="NEW" column="new" orders={newOrders} emptyText="No new orders" onBump={handleBump} showCollectPayment={false} isRushed={isOrderRushed} onRushToggle={handleRushToggle} onRemakeItem={handleRemakeItem} onHoldOrder={handleHoldOrder} estimatePrepMinutes={estimatePrepMinutes} stationFilterId={selectedStationId} menuItemToCategoryMap={menuItemToCategoryMap} categoryToStationMap={categoryToStationMap} />
 
-        {/* PREPARING column */}
-        <View style={styles.column}>
-          <View style={[styles.columnHeader, { backgroundColor: COLUMN_COLORS.preparing.bg }]}>
-            <Text style={[styles.columnHeaderText, { color: COLUMN_COLORS.preparing.text }]}>PREPARING</Text>
-            <View style={styles.countBadge}>
-              <Text style={styles.countBadgeText}>{preparingOrders.length}</Text>
-            </View>
-          </View>
-          {preparingOrders.length === 0 ? (
-            <View style={styles.emptyColumn}>
-              <Text style={styles.emptyColumnText}>No orders preparing</Text>
-            </View>
-          ) : (
-            <FlatList
-              data={preparingOrders}
-              keyExtractor={(o) => o.id}
-              contentContainerStyle={styles.columnBody}
-              showsVerticalScrollIndicator={false}
-              renderItem={({ item }) => (
-                <OrderCard
-                  order={item}
-                  column="preparing"
-                  onBump={handleBump}
-                  showCollectPayment={false}
-                  isRushed={rushedOrders.has(item.id)}
-                  onRushToggle={handleRushToggle}
-                  onRecall={handleRecall}
-                  onRemakeItem={handleRemakeItem}
-                  estimatedPrepMinutes={estimatePrepMinutes(item)}
-                  stationFilterId={selectedStationId}
-                  menuItemToCategoryMap={menuItemToCategoryMap}
-                  categoryToStationMap={categoryToStationMap}
-                />
-              )}
-            />
-          )}
-        </View>
+        <KdsColumn title="PREPARING" column="preparing" orders={preparingOrders} emptyText="No orders preparing" onBump={handleBump} showCollectPayment={false} isRushed={isOrderRushed} onRushToggle={handleRushToggle} onRecall={handleRecall} onRemakeItem={handleRemakeItem} estimatePrepMinutes={estimatePrepMinutes} stationFilterId={selectedStationId} menuItemToCategoryMap={menuItemToCategoryMap} categoryToStationMap={categoryToStationMap} />
 
-        {/* READY column */}
-        <View style={styles.column}>
-          <View style={[styles.columnHeader, { backgroundColor: COLUMN_COLORS.ready.bg }]}>
-            <Text style={[styles.columnHeaderText, { color: COLUMN_COLORS.ready.text }]}>READY</Text>
-            <View style={styles.countBadge}>
-              <Text style={styles.countBadgeText}>{readyOrders.length}</Text>
-            </View>
-          </View>
-          {readyOrders.length === 0 ? (
-            <View style={styles.emptyColumn}>
-              <Text style={styles.emptyColumnText}>No orders ready</Text>
-            </View>
-          ) : (
-            <FlatList
-              data={readyOrders}
-              keyExtractor={(o) => o.id}
-              contentContainerStyle={styles.columnBody}
-              showsVerticalScrollIndicator={false}
-              renderItem={({ item }) => (
-                <OrderCard
-                  order={item}
-                  column="ready"
-                  onBump={handleBump}
-                  onCollectPayment={handleCollectPayment}
-                  showCollectPayment={showCollectPayment}
-                  isRushed={rushedOrders.has(item.id)}
-                  onRushToggle={handleRushToggle}
-                  printStatus={printStatuses[item.id] ?? item.printStatus ?? 'none'}
-                  onRetryPrint={handleRetryPrint}
-                  onRecall={handleRecall}
-                  onRemakeItem={handleRemakeItem}
-                  estimatedPrepMinutes={estimatePrepMinutes(item)}
-                  stationFilterId={selectedStationId}
-                  menuItemToCategoryMap={menuItemToCategoryMap}
-                  categoryToStationMap={categoryToStationMap}
-                />
-              )}
-            />
-          )}
-        </View>
+        <KdsColumn title="READY" column="ready" orders={readyOrders} emptyText="No orders ready" onBump={handleBump} onCollectPayment={handleCollectPayment} showCollectPayment={showCollectPayment} isRushed={isOrderRushed} onRushToggle={handleRushToggle} printStatuses={printStatuses} onRetryPrint={handleRetryPrint} onRecall={handleRecall} onRemakeItem={handleRemakeItem} estimatePrepMinutes={estimatePrepMinutes} stationFilterId={selectedStationId} menuItemToCategoryMap={menuItemToCategoryMap} categoryToStationMap={categoryToStationMap} />
       </View>
 
       {/* Payment Terminal Modal */}
@@ -664,18 +480,6 @@ function createStyles(
       flex: 1,
       backgroundColor: colors.background,
     },
-    loadingContainer: {
-      flex: 1,
-      backgroundColor: colors.background,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    loadingText: {
-      fontSize: typography.fontSize.md,
-      color: colors.textSecondary,
-      marginTop: spacing.md,
-    },
-
     // Top bar
     topBar: {
       flexDirection: 'row',
